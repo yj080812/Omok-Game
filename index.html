@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 오목 게임</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f5efe5;
+      font-family: Arial, sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+      padding: 20px 16px 240px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .app.menu-collapsed {
+      padding-bottom: 115px;
+    }
+
+    .game-header {
+      width: 100%;
+      max-width: 680px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .game-header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .game-header p {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .game-options {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 14px;
+    }
+
+    .game-options span {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: white;
+      border: 1px solid #ddd;
+    }
+
+    .canvas-area {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    #game-canvas {
+      width: min(92vw, 640px);
+      aspect-ratio: 1 / 1;
+      border: 2px solid #3b2412;
+      border-radius: 12px;
+      background: #e7b96f;
+      touch-action: none;
+      cursor: pointer;
+    }
+
+    .bottom-buttons {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      border-top: 1px solid #ddd;
+      max-height: 45vh;
+      overflow-y: auto;
+      z-index: 10;
+    }
+
+    .bottom-buttons.collapsed .secondary-button {
+      display: none;
+    }
+
+    .bottom-buttons button {
+      min-height: 52px;
+      border: none;
+      border-radius: 14px;
+      background: #3b2412;
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .bottom-buttons button.secondary-button {
+      background: #6b4524;
+    }
+
+    .bottom-buttons button.danger-button {
+      background: #8a1f1f;
+    }
+
+    .bottom-buttons button:active {
+      transform: scale(0.96);
+    }
+
+    @media (max-width: 420px) {
+      .app {
+        padding-top: 14px;
+      }
+
+      .game-header h1 {
+        font-size: 24px;
+      }
+
+      .bottom-buttons {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app menu-collapsed">
+    <header class="game-header">
+      <h1>AI 오목 게임</h1>
+      <p id="status-text">17단계: 금수 위치 표시 준비 완료</p>
+
+      <div class="game-options">
+        <span id="difficulty-text">난이도: Easy</span>
+        <span id="rule-text">룰: 렌주룰</span>
+        <span id="forbidden-text">금수 표시: 꺼짐</span>
+        <span id="player-text">플레이어: 흑돌</span>
+        <span id="turn-text">현재 차례: 흑돌</span>
+        <span id="move-count-text">수순: 0수</span>
+        <span id="record-text">전적: 0승 0패 0무</span>
+      </div>
+    </header>
+
+    <main class="canvas-area">
+      <canvas id="game-canvas"></canvas>
+    </main>
+
+    <nav id="bottom-buttons" class="bottom-buttons collapsed">
+      <button id="new-game-btn">새 게임</button>
+      <button id="difficulty-btn">난이도</button>
+      <button id="color-btn">흑/백</button>
+      <button id="menu-toggle-btn">메뉴 열기</button>
+
+      <button id="rule-btn" class="secondary-button">룰</button>
+      <button id="forbidden-btn" class="secondary-button">금수 표시</button>
+      <button id="hint-btn" class="secondary-button">힌트</button>
+      <button id="undo-btn" class="secondary-button">무르기</button>
+      <button id="save-btn" class="secondary-button">저장</button>
+      <button id="load-btn" class="secondary-button">불러오기</button>
+      <button id="coord-btn" class="secondary-button">좌표</button>
+      <button id="help-btn" class="secondary-button">도움말</button>
+      <button id="reset-record-btn" class="danger-button secondary-button">전적 초기화</button>
+      <button id="delete-save-btn" class="danger-button secondary-button">저장 삭제</button>
+    </nav>
+  </div>
+
+  <script>
+    const appElement = document.querySelector(".app");
+    const bottomButtons = document.getElementById("bottom-buttons");
+
+    const canvas = document.getElementById("game-canvas");
+    const ctx = canvas.getContext("2d");
+
+    const statusText = document.getElementById("status-text");
+    const difficultyText = document.getElementById("difficulty-text");
+    const ruleText = document.getElementById("rule-text");
+    const forbiddenText = document.getElementById("forbidden-text");
+    const playerText = document.getElementById("player-text");
+    const turnText = document.getElementById("turn-text");
+    const moveCountText = document.getElementById("move-count-text");
+    const recordText = document.getElementById("record-text");
+
+    const newGameBtn = document.getElementById("new-game-btn");
+    const difficultyBtn = document.getElementById("difficulty-btn");
+    const colorBtn = document.getElementById("color-btn");
+    const menuToggleBtn = document.getElementById("menu-toggle-btn");
+    const ruleBtn = document.getElementById("rule-btn");
+    const forbiddenBtn = document.getElementById("forbidden-btn");
+    const hintBtn = document.getElementById("hint-btn");
+    const undoBtn = document.getElementById("undo-btn");
+    const saveBtn = document.getElementById("save-btn");
+    const loadBtn = document.getElementById("load-btn");
+    const coordBtn = document.getElementById("coord-btn");
+    const helpBtn = document.getElementById("help-btn");
+    const resetRecordBtn = document.getElementById("reset-record-btn");
+    const deleteSaveBtn = document.getElementById("delete-save-btn");
+
+    const CANVAS_SIZE = 640;
+    const BOARD_SIZE = 15;
+    const MARGIN = 40;
+    const CELL_SIZE = (CANVAS_SIZE - MARGIN * 2) / (BOARD_SIZE - 1);
+
+    const EMPTY = 0;
+    const BLACK = 1;
+    const WHITE = 2;
+
+    const SAVE_KEY = "omok-ai-save-data";
+    const RECORD_KEY = "omok-ai-record-data";
+
+    let difficulty = "Easy";
+    let ruleMode = "renju";
+    let showCoordinates = true;
+    let showForbidden = false;
+    let isMenuCollapsed = true;
+
+    let humanPlayer = BLACK;
+    let aiPlayer = WHITE;
+    let currentPlayer = BLACK;
+
+    let lastPosition = null;
+    let hintPosition = null;
+    let winningCells = [];
+    let moveHistory = [];
+
+    let isGameOver = false;
+    let isAiThinking = false;
+    let recordedResult = null;
+
+    let board = createEmptyBoard();
+    let record = loadRecord();
+
+    function createEmptyBoard() {
+      return Array.from({ length: BOARD_SIZE }, () => {
+        return Array(BOARD_SIZE).fill(EMPTY);
+      });
+    }
+
+    function initCanvas() {
+      canvas.width = CANVAS_SIZE;
+      canvas.height = CANVAS_SIZE;
+
+      updateDifficultyText();
+      updateRuleText();
+      updateForbiddenText();
+      updatePlayerText();
+      updateTurnText();
+      updateMoveCountText();
+      updateRecordText();
+      updateMenuState();
+      drawBoard();
+    }
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+      drawBoardBackground();
+
+      if (showCoordinates) {
+        drawCoordinates();
+      }
+
+      drawGridLines();
+      drawStarPoints();
+      drawForbiddenPositions();
+      drawStones();
+      drawHintPosition();
+      drawWinningLine();
+      drawLastPosition();
+    }
+
+    function drawBoardBackground() {
+      ctx.fillStyle = "#e7b96f";
+      ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    }
+
+    function drawCoordinates() {
+      ctx.fillStyle = "#3b2412";
+      ctx.font = "bold 15px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const columnLabels = [
+        "A", "B", "C", "D", "E",
+        "F", "G", "H", "I", "J",
+        "K", "L", "M", "N", "O"
+      ];
+
+      for (let i = 0; i < BOARD_SIZE; i++) {
+        const position = MARGIN + i * CELL_SIZE;
+
+        ctx.fillText(columnLabels[i], position, MARGIN - 20);
+        ctx.fillText(columnLabels[i], position, CANVAS_SIZE - MARGIN + 20);
+
+        ctx.fillText(String(i + 1), MARGIN - 20, position);
+        ctx.fillText(String(i + 1), CANVAS_SIZE - MARGIN + 20, position);
+      }
+
+      ctx.textBaseline = "alphabetic";
+    }
+
+    function drawGridLines() {
+      ctx.strokeStyle = "#3b2412";
+      ctx.lineWidth = 1.5;
+
+      for (let i = 0; i < BOARD_SIZE; i++) {
+        const position = MARGIN + i * CELL_SIZE;
+
+        ctx.beginPath();
+        ctx.moveTo(MARGIN, position);
+        ctx.lineTo(CANVAS_SIZE - MARGIN, position);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(position, MARGIN);
+        ctx.lineTo(position, CANVAS_SIZE - MARGIN);
+        ctx.stroke();
+      }
+    }
+
+    function drawStarPoints() {
+      const starPoints = [
+        [3, 3], [3, 7], [3, 11],
+        [7, 3], [7, 7], [7, 11],
+        [11, 3], [11, 7], [11, 11],
+      ];
+
+      ctx.fillStyle = "#3b2412";
+
+      for (const [row, col] of starPoints) {
+        const x = MARGIN + col * CELL_SIZE;
+        const y = MARGIN + row * CELL_SIZE;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawForbiddenPositions() {
+      if (!showForbidden) {
+        return;
+      }
+
+      if (ruleMode !== "renju") {
+        return;
+      }
+
+      ctx.save();
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (board[row][col] !== EMPTY) {
+            continue;
+          }
+
+          const reason = getForbiddenReason(row, col, BLACK);
+
+          if (reason === null) {
+            continue;
+          }
+
+          const x = MARGIN + col * CELL_SIZE;
+          const y = MARGIN + row * CELL_SIZE;
+          const size = CELL_SIZE * 0.22;
+
+          ctx.strokeStyle = "rgba(220, 0, 0, 0.75)";
+          ctx.lineWidth = 3;
+
+          ctx.beginPath();
+          ctx.moveTo(x - size, y - size);
+          ctx.lineTo(x + size, y + size);
+          ctx.moveTo(x + size, y - size);
+          ctx.lineTo(x - size, y + size);
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(220, 0, 0, 0.85)";
+          ctx.font = "bold 12px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("금", x, y - CELL_SIZE * 0.35);
+        }
+      }
+
+      ctx.textBaseline = "alphabetic";
+      ctx.restore();
+    }
+
+    function drawStones() {
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          const stone = board[row][col];
+
+          if (stone !== EMPTY) {
+            drawStone(row, col, stone);
+          }
+        }
+      }
+    }
+
+    function drawStone(row, col, stone) {
+      const x = MARGIN + col * CELL_SIZE;
+      const y = MARGIN + row * CELL_SIZE;
+      const radius = CELL_SIZE * 0.38;
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+
+      if (stone === BLACK) {
+        ctx.fillStyle = "#111111";
+      } else {
+        ctx.fillStyle = "#f8f8f8";
+      }
+
+      ctx.fill();
+
+      ctx.strokeStyle = "#222222";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawHintPosition() {
+      if (hintPosition === null || isGameOver) {
+        return;
+      }
+
+      const { row, col } = hintPosition;
+      const x = MARGIN + col * CELL_SIZE;
+      const y = MARGIN + row * CELL_SIZE;
+
+      ctx.strokeStyle = "#0077ff";
+      ctx.lineWidth = 4;
+
+      ctx.beginPath();
+      ctx.arc(x, y, CELL_SIZE * 0.43, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#0077ff";
+      ctx.font = "bold 18px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("?", x, y);
+      ctx.textBaseline = "alphabetic";
+    }
+
+    function drawWinningLine() {
+      if (winningCells.length < 5) {
+        return;
+      }
+
+      const firstCell = winningCells[0];
+      const lastCell = winningCells[winningCells.length - 1];
+
+      const startX = MARGIN + firstCell.col * CELL_SIZE;
+      const startY = MARGIN + firstCell.row * CELL_SIZE;
+      const endX = MARGIN + lastCell.col * CELL_SIZE;
+      const endY = MARGIN + lastCell.row * CELL_SIZE;
+
+      ctx.strokeStyle = "#e60000";
+      ctx.lineWidth = 7;
+      ctx.lineCap = "round";
+
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      ctx.lineCap = "butt";
+    }
+
+    function drawLastPosition() {
+      if (lastPosition === null || isGameOver) {
+        return;
+      }
+
+      const { row, col } = lastPosition;
+      const x = MARGIN + col * CELL_SIZE;
+      const y = MARGIN + row * CELL_SIZE;
+
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 3;
+
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y);
+      ctx.lineTo(x + 8, y);
+      ctx.moveTo(x, y - 8);
+      ctx.lineTo(x, y + 8);
+      ctx.stroke();
+    }
+
+    function getBoardPosition(event) {
+      const rect = canvas.getBoundingClientRect();
+
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const canvasX = (event.clientX - rect.left) * scaleX;
+      const canvasY = (event.clientY - rect.top) * scaleY;
+
+      const col = Math.round((canvasX - MARGIN) / CELL_SIZE);
+      const row = Math.round((canvasY - MARGIN) / CELL_SIZE);
+
+      if (
+        row < 0 ||
+        row >= BOARD_SIZE ||
+        col < 0 ||
+        col >= BOARD_SIZE
+      ) {
+        return null;
+      }
+
+      const nearestX = MARGIN + col * CELL_SIZE;
+      const nearestY = MARGIN + row * CELL_SIZE;
+      const distanceX = Math.abs(canvasX - nearestX);
+      const distanceY = Math.abs(canvasY - nearestY);
+
+      if (distanceX > CELL_SIZE / 2 || distanceY > CELL_SIZE / 2) {
+        return null;
+      }
+
+      return { row, col };
+    }
+
+    function handleCanvasPointerDown(event) {
+      event.preventDefault();
+
+      if (isGameOver) {
+        setStatus("게임이 끝났습니다. 새 게임 또는 무르기를 사용할 수 있습니다");
+        return;
+      }
+
+      if (isAiThinking) {
+        setStatus("AI가 생각 중입니다. 잠시 기다려주세요");
+        return;
+      }
+
+      if (currentPlayer !== humanPlayer) {
+        setStatus("지금은 AI 차례입니다");
+        return;
+      }
+
+      const position = getBoardPosition(event);
+
+      if (position === null) {
+        setStatus("오목판 안쪽 교차점을 선택하세요");
+        return;
+      }
+
+      const { row, col } = position;
+
+      if (board[row][col] !== EMPTY) {
+        setStatus("이미 돌이 있는 자리입니다");
+        return;
+      }
+
+      const forbiddenReason = getForbiddenReason(row, col, humanPlayer);
+
+      if (forbiddenReason !== null) {
+        setStatus(`금수입니다: ${forbiddenReason}`);
+        return;
+      }
+
+      makeMove(row, col, humanPlayer);
+
+      if (!isGameOver) {
+        requestAiMove();
+      }
+    }
+
+    function makeMove(row, col, stone) {
+      board[row][col] = stone;
+      lastPosition = { row, col };
+      hintPosition = null;
+
+      moveHistory.push({ row, col, stone });
+      updateMoveCountText();
+
+      const winResult = checkWin(row, col, stone);
+
+      if (winResult !== null) {
+        winningCells = winResult;
+        isGameOver = true;
+
+        if (stone === humanPlayer) {
+          recordGameResult("human");
+          setStatus(`플레이어 ${getStoneName(stone)} 승리! 전적이 기록되었습니다`);
+        } else {
+          recordGameResult("ai");
+          setStatus(`AI ${getStoneName(stone)} 승리! 전적이 기록되었습니다`);
+        }
+
+        updateTurnText();
+        drawBoard();
+        return;
+      }
+
+      if (isBoardFull()) {
+        isGameOver = true;
+        recordGameResult("draw");
+        updateTurnText();
+        drawBoard();
+        setStatus("무승부입니다. 전적이 기록되었습니다");
+        return;
+      }
+
+      currentPlayer = getOpponent(stone);
+      updateTurnText();
+      drawBoard();
+
+      const displayRow = row + 1;
+      const displayCol = col + 1;
+
+      if (stone === humanPlayer) {
+        setStatus(`${displayRow}행 ${displayCol}열에 플레이어가 두었습니다`);
+      } else {
+        setStatus(`${displayRow}행 ${displayCol}열에 AI가 두었습니다`);
+      }
+    }
+
+    function requestAiMove() {
+      if (isGameOver || currentPlayer !== aiPlayer) {
+        return;
+      }
+
+      isAiThinking = true;
+      updateTurnText();
+      setStatus("AI가 생각 중입니다...");
+
+      setTimeout(() => {
+        const move = getAiMove();
+
+        isAiThinking = false;
+
+        if (move === null) {
+          isGameOver = true;
+          recordGameResult("draw");
+          updateTurnText();
+          drawBoard();
+          setStatus("무승부입니다. 전적이 기록되었습니다");
+          return;
+        }
+
+        makeMove(move.row, move.col, aiPlayer);
+      }, 500);
+    }
+
+    function getAiMove() {
+      if (difficulty === "Easy") {
+        return getRandomAiMove(aiPlayer);
+      }
+
+      if (difficulty === "Normal") {
+        return getNormalAiMove();
+      }
+
+      return getHardAiMove();
+    }
+
+    function getNormalAiMove() {
+      const aiWinMove = findWinningMove(aiPlayer);
+
+      if (aiWinMove !== null) {
+        return aiWinMove;
+      }
+
+      const blockHumanMove = findWinningMove(humanPlayer);
+
+      if (blockHumanMove !== null) {
+        return blockHumanMove;
+      }
+
+      return getRandomNearMove(aiPlayer);
+    }
+
+    function getHardAiMove() {
+      const aiWinMove = findWinningMove(aiPlayer);
+
+      if (aiWinMove !== null) {
+        return aiWinMove;
+      }
+
+      const blockHumanMove = findWinningMove(humanPlayer);
+
+      if (blockHumanMove !== null) {
+        return blockHumanMove;
+      }
+
+      return getBestScoredMove(aiPlayer, humanPlayer);
+    }
+
+    function findWinningMove(stone) {
+      const candidates = getCandidateMoves();
+
+      for (const move of candidates) {
+        const { row, col } = move;
+
+        if (board[row][col] !== EMPTY) {
+          continue;
+        }
+
+        if (getForbiddenReason(row, col, stone) !== null) {
+          continue;
+        }
+
+        board[row][col] = stone;
+        const result = checkWin(row, col, stone);
+        board[row][col] = EMPTY;
+
+        if (result !== null) {
+          return { row, col };
+        }
+      }
+
+      return null;
+    }
+
+    function getBestScoredMove(myStone, opponentStone) {
+      const candidates = getCandidateMoves();
+
+      let bestScore = -Infinity;
+      let bestMoves = [];
+
+      for (const move of candidates) {
+        if (getForbiddenReason(move.row, move.col, myStone) !== null) {
+          continue;
+        }
+
+        const attackScore = evaluatePosition(move.row, move.col, myStone);
+        const defenseScore = evaluatePosition(move.row, move.col, opponentStone) * 1.15;
+        const centerScore = getCenterScore(move.row, move.col);
+
+        const totalScore = attackScore + defenseScore + centerScore;
+
+        if (totalScore > bestScore) {
+          bestScore = totalScore;
+          bestMoves = [move];
+        } else if (totalScore === bestScore) {
+          bestMoves.push(move);
+        }
+      }
+
+      if (bestMoves.length === 0) {
+        return getRandomAiMove(myStone);
+      }
+
+      const randomIndex = Math.floor(Math.random() * bestMoves.length);
+      return bestMoves[randomIndex];
+    }
+
+    function getRandomNearMove(stone) {
+      const candidates = getCandidateMoves().filter((move) => {
+        return getForbiddenReason(move.row, move.col, stone) === null;
+      });
+
+      if (candidates.length === 0) {
+        return getRandomAiMove(stone);
+      }
+
+      const randomIndex = Math.floor(Math.random() * candidates.length);
+      return candidates[randomIndex];
+    }
+
+    function getCandidateMoves() {
+      if (isBoardEmpty()) {
+        return [{ row: 7, col: 7 }];
+      }
+
+      const candidateMap = new Map();
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (board[row][col] === EMPTY) {
+            continue;
+          }
+
+          for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) {
+              const nextRow = row + dr;
+              const nextCol = col + dc;
+
+              if (
+                isInsideBoard(nextRow, nextCol) &&
+                board[nextRow][nextCol] === EMPTY
+              ) {
+                candidateMap.set(`${nextRow},${nextCol}`, {
+                  row: nextRow,
+                  col: nextCol,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      const candidates = Array.from(candidateMap.values());
+
+      if (candidates.length === 0) {
+        return getAllEmptyCells();
+      }
+
+      return candidates;
+    }
+
+    function evaluatePosition(row, col, stone) {
+      if (board[row][col] !== EMPTY) {
+        return -Infinity;
+      }
+
+      if (getForbiddenReason(row, col, stone) !== null) {
+        return -Infinity;
+      }
+
+      board[row][col] = stone;
+
+      const directions = [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1],
+      ];
+
+      let score = 0;
+
+      for (const [dr, dc] of directions) {
+        const lineInfo = getLineInfo(row, col, dr, dc, stone);
+        score += getPatternScore(lineInfo.count, lineInfo.openEnds);
+      }
+
+      board[row][col] = EMPTY;
+
+      return score;
+    }
+
+    function getLineInfo(row, col, dr, dc, stone) {
+      let count = 1;
+      let openEnds = 0;
+
+      let nextRow = row + dr;
+      let nextCol = col + dc;
+
+      while (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === stone) {
+        count++;
+        nextRow += dr;
+        nextCol += dc;
+      }
+
+      if (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === EMPTY) {
+        openEnds++;
+      }
+
+      nextRow = row - dr;
+      nextCol = col - dc;
+
+      while (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === stone) {
+        count++;
+        nextRow -= dr;
+        nextCol -= dc;
+      }
+
+      if (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === EMPTY) {
+        openEnds++;
+      }
+
+      return { count, openEnds };
+    }
+
+    function getPatternScore(count, openEnds) {
+      if (count >= 5) {
+        return 100000;
+      }
+
+      if (count === 4 && openEnds === 2) {
+        return 50000;
+      }
+
+      if (count === 4 && openEnds === 1) {
+        return 20000;
+      }
+
+      if (count === 3 && openEnds === 2) {
+        return 8000;
+      }
+
+      if (count === 3 && openEnds === 1) {
+        return 1500;
+      }
+
+      if (count === 2 && openEnds === 2) {
+        return 600;
+      }
+
+      if (count === 2 && openEnds === 1) {
+        return 150;
+      }
+
+      if (count === 1 && openEnds === 2) {
+        return 20;
+      }
+
+      return 1;
+    }
+
+    function getCenterScore(row, col) {
+      const center = Math.floor(BOARD_SIZE / 2);
+      const distance = Math.abs(row - center) + Math.abs(col - center);
+
+      return Math.max(0, 30 - distance * 2);
+    }
+
+    function getRandomAiMove(stone) {
+      const legalCells = getAllEmptyCells().filter((cell) => {
+        return getForbiddenReason(cell.row, cell.col, stone) === null;
+      });
+
+      if (legalCells.length === 0) {
+        return null;
+      }
+
+      if (isBoardEmpty()) {
+        const centerMove = legalCells.find((cell) => cell.row === 7 && cell.col === 7);
+
+        if (centerMove !== undefined) {
+          return centerMove;
+        }
+      }
+
+      const randomIndex = Math.floor(Math.random() * legalCells.length);
+      return legalCells[randomIndex];
+    }
+
+    function getAllEmptyCells() {
+      const emptyCells = [];
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (board[row][col] === EMPTY) {
+            emptyCells.push({ row, col });
+          }
+        }
+      }
+
+      return emptyCells;
+    }
+
+    function checkWin(row, col, stone) {
+      if (ruleMode === "renju" && stone === BLACK) {
+        return getExactFiveCells(row, col, stone);
+      }
+
+      const directions = [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1],
+      ];
+
+      for (const [dr, dc] of directions) {
+        const connectedCells = getConnectedCellsInDirection(row, col, dr, dc, stone);
+
+        if (connectedCells.length >= 5) {
+          return connectedCells;
+        }
+      }
+
+      return null;
+    }
+
+    function getExactFiveCells(row, col, stone) {
+      const directions = [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1],
+      ];
+
+      for (const [dr, dc] of directions) {
+        const connectedCells = getConnectedCellsInDirection(row, col, dr, dc, stone);
+
+        if (connectedCells.length === 5) {
+          return connectedCells;
+        }
+      }
+
+      return null;
+    }
+
+    function getConnectedCellsInDirection(row, col, dr, dc, stone) {
+      const connectedCells = [{ row, col }];
+
+      let nextRow = row + dr;
+      let nextCol = col + dc;
+
+      while (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === stone) {
+        connectedCells.push({ row: nextRow, col: nextCol });
+        nextRow += dr;
+        nextCol += dc;
+      }
+
+      nextRow = row - dr;
+      nextCol = col - dc;
+
+      while (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === stone) {
+        connectedCells.unshift({ row: nextRow, col: nextCol });
+        nextRow -= dr;
+        nextCol -= dc;
+      }
+
+      return connectedCells;
+    }
+
+    function getForbiddenReason(row, col, stone) {
+      if (ruleMode !== "renju") {
+        return null;
+      }
+
+      if (stone !== BLACK) {
+        return null;
+      }
+
+      if (!isInsideBoard(row, col)) {
+        return null;
+      }
+
+      if (board[row][col] !== EMPTY) {
+        return null;
+      }
+
+      board[row][col] = stone;
+
+      const reasons = [];
+      const hasSixOrMore = hasOverline(row, col, stone);
+
+      if (hasSixOrMore) {
+        reasons.push("6목 금수");
+      } else {
+        const exactFive = getExactFiveCells(row, col, stone);
+
+        if (exactFive === null) {
+          const openThreeCount = countOpenThrees(row, col, stone);
+          const fourCount = countFours(row, col, stone);
+
+          if (openThreeCount >= 2) {
+            reasons.push("33 금수");
+          }
+
+          if (fourCount >= 2) {
+            reasons.push("44 금수");
+          }
+        }
+      }
+
+      board[row][col] = EMPTY;
+
+      if (reasons.length === 0) {
+        return null;
+      }
+
+      return reasons.join(", ");
+    }
+
+    function hasOverline(row, col, stone) {
+      const directions = [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1],
+      ];
+
+      for (const [dr, dc] of directions) {
+        const connectedCells = getConnectedCellsInDirection(row, col, dr, dc, stone);
+
+        if (connectedCells.length >= 6) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function countFours(row, col, stone) {
+      const directions = [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1],
+      ];
+
+      let count = 0;
+
+      for (const [dr, dc] of directions) {
+        if (hasFourThreatInDirection(row, col, dr, dc, stone)) {
+          count++;
+        }
+      }
+
+      return count;
+    }
+
+    function hasFourThreatInDirection(row, col, dr, dc, stone) {
+      const winningMoves = new Set();
+
+      for (let offset = -5; offset <= 5; offset++) {
+        const testRow = row + dr * offset;
+        const testCol = col + dc * offset;
+
+        if (!isInsideBoard(testRow, testCol)) {
+          continue;
+        }
+
+        if (board[testRow][testCol] !== EMPTY) {
+          continue;
+        }
+
+        board[testRow][testCol] = stone;
+
+        const connectedCells = getConnectedCellsInDirection(testRow, testCol, dr, dc, stone);
+
+        if (stone === BLACK && ruleMode === "renju") {
+          if (connectedCells.length === 5) {
+            winningMoves.add(`${testRow},${testCol}`);
+          }
+        } else {
+          if (connectedCells.length >= 5) {
+            winningMoves.add(`${testRow},${testCol}`);
+          }
+        }
+
+        board[testRow][testCol] = EMPTY;
+      }
+
+      return winningMoves.size > 0;
+    }
+
+    function countOpenThrees(row, col, stone) {
+      const directions = [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1],
+      ];
+
+      let count = 0;
+
+      for (const [dr, dc] of directions) {
+        if (hasOpenThreeInDirection(row, col, dr, dc, stone)) {
+          count++;
+        }
+      }
+
+      return count;
+    }
+
+    function hasOpenThreeInDirection(row, col, dr, dc, stone) {
+      for (let offset = -4; offset <= 4; offset++) {
+        const testRow = row + dr * offset;
+        const testCol = col + dc * offset;
+
+        if (!isInsideBoard(testRow, testCol)) {
+          continue;
+        }
+
+        if (board[testRow][testCol] !== EMPTY) {
+          continue;
+        }
+
+        board[testRow][testCol] = stone;
+
+        const createsOpenFour = hasOpenFourInDirection(testRow, testCol, dr, dc, stone);
+
+        board[testRow][testCol] = EMPTY;
+
+        if (createsOpenFour) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function hasOpenFourInDirection(row, col, dr, dc, stone) {
+      const winningMoves = new Set();
+
+      for (let offset = -5; offset <= 5; offset++) {
+        const testRow = row + dr * offset;
+        const testCol = col + dc * offset;
+
+        if (!isInsideBoard(testRow, testCol)) {
+          continue;
+        }
+
+        if (board[testRow][testCol] !== EMPTY) {
+          continue;
+        }
+
+        board[testRow][testCol] = stone;
+
+        const connectedCells = getConnectedCellsInDirection(testRow, testCol, dr, dc, stone);
+
+        if (connectedCells.length === 5) {
+          winningMoves.add(`${testRow},${testCol}`);
+        }
+
+        board[testRow][testCol] = EMPTY;
+      }
+
+      return winningMoves.size >= 2;
+    }
+
+    function isInsideBoard(row, col) {
+      return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
+    }
+
+    function isBoardFull() {
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (board[row][col] === EMPTY) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+    function isBoardEmpty() {
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (board[row][col] !== EMPTY) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+    function getOpponent(stone) {
+      if (stone === BLACK) {
+        return WHITE;
+      }
+
+      return BLACK;
+    }
+
+    function getStoneName(stone) {
+      if (stone === BLACK) {
+        return "흑돌";
+      }
+
+      return "백돌";
+    }
+
+    function updateDifficultyText() {
+      difficultyText.textContent = `난이도: ${difficulty}`;
+    }
+
+    function updateRuleText() {
+      if (ruleMode === "renju") {
+        ruleText.textContent = "룰: 렌주룰";
+      } else {
+        ruleText.textContent = "룰: 자유룰";
+      }
+    }
+
+    function updateForbiddenText() {
+      if (showForbidden) {
+        forbiddenText.textContent = "금수 표시: 켜짐";
+      } else {
+        forbiddenText.textContent = "금수 표시: 꺼짐";
+      }
+    }
+
+    function updateTurnText() {
+      if (isGameOver) {
+        turnText.textContent = "게임 종료";
+        return;
+      }
+
+      if (isAiThinking) {
+        turnText.textContent = "현재 차례: AI 생각 중";
+        return;
+      }
+
+      if (currentPlayer === humanPlayer) {
+        turnText.textContent = `현재 차례: 플레이어 ${getStoneName(currentPlayer)}`;
+      } else {
+        turnText.textContent = `현재 차례: AI ${getStoneName(currentPlayer)}`;
+      }
+    }
+
+    function updatePlayerText() {
+      playerText.textContent = `플레이어: ${getStoneName(humanPlayer)}`;
+    }
+
+    function updateMoveCountText() {
+      moveCountText.textContent = `수순: ${moveHistory.length}수`;
+    }
+
+    function setStatus(message) {
+      statusText.textContent = message;
+    }
+
+    function loadRecord() {
+      const savedRecord = localStorage.getItem(RECORD_KEY);
+
+      if (savedRecord === null) {
+        return {
+          humanWin: 0,
+          aiWin: 0,
+          draw: 0,
+        };
+      }
+
+      try {
+        const parsedRecord = JSON.parse(savedRecord);
+
+        if (
+          typeof parsedRecord.humanWin !== "number" ||
+          typeof parsedRecord.aiWin !== "number" ||
+          typeof parsedRecord.draw !== "number"
+        ) {
+          return {
+            humanWin: 0,
+            aiWin: 0,
+            draw: 0,
+          };
+        }
+
+        return parsedRecord;
+      } catch (error) {
+        return {
+          humanWin: 0,
+          aiWin: 0,
+          draw: 0,
+        };
+      }
+    }
+
+    function updateRecordText() {
+      recordText.textContent =
+        `전적: ${record.humanWin}승 ${record.aiWin}패 ${record.draw}무`;
+    }
+
+    function saveRecord() {
+      localStorage.setItem(RECORD_KEY, JSON.stringify(record));
+    }
+
+    function recordGameResult(result) {
+      if (recordedResult !== null) {
+        return;
+      }
+
+      recordedResult = result;
+
+      if (result === "human") {
+        record.humanWin++;
+      } else if (result === "ai") {
+        record.aiWin++;
+      } else if (result === "draw") {
+        record.draw++;
+      }
+
+      saveRecord();
+      updateRecordText();
+    }
+
+    function removeRecordedResult() {
+      if (recordedResult === null) {
+        return;
+      }
+
+      if (recordedResult === "human") {
+        record.humanWin = Math.max(0, record.humanWin - 1);
+      } else if (recordedResult === "ai") {
+        record.aiWin = Math.max(0, record.aiWin - 1);
+      } else if (recordedResult === "draw") {
+        record.draw = Math.max(0, record.draw - 1);
+      }
+
+      recordedResult = null;
+      saveRecord();
+      updateRecordText();
+    }
+
+    function resetGame(message) {
+      board = createEmptyBoard();
+      currentPlayer = BLACK;
+      lastPosition = null;
+      hintPosition = null;
+      winningCells = [];
+      moveHistory = [];
+      isGameOver = false;
+      isAiThinking = false;
+      recordedResult = null;
+
+      updateDifficultyText();
+      updateRuleText();
+      updateForbiddenText();
+      updatePlayerText();
+      updateTurnText();
+      updateMoveCountText();
+      drawBoard();
+      setStatus(message);
+
+      if (currentPlayer === aiPlayer) {
+        requestAiMove();
+      }
+    }
+
+    function handleNewGame() {
+      resetGame("새 게임을 시작합니다");
+    }
+
+    function handleDifficulty() {
+      if (difficulty === "Easy") {
+        difficulty = "Normal";
+      } else if (difficulty === "Normal") {
+        difficulty = "Hard";
+      } else {
+        difficulty = "Easy";
+      }
+
+      updateDifficultyText();
+
+      if (difficulty === "Easy") {
+        setStatus("Easy: AI가 랜덤으로 둡니다");
+      } else if (difficulty === "Normal") {
+        setStatus("Normal: AI가 승리/방어만 판단합니다");
+      } else {
+        setStatus("Hard: AI가 공격/방어 점수를 계산합니다");
+      }
+    }
+
+    function handleColorChange() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 색을 바꿀 수 없습니다");
+        return;
+      }
+
+      if (humanPlayer === BLACK) {
+        humanPlayer = WHITE;
+        aiPlayer = BLACK;
+      } else {
+        humanPlayer = BLACK;
+        aiPlayer = WHITE;
+      }
+
+      resetGame(`플레이어를 ${getStoneName(humanPlayer)}로 변경했습니다`);
+    }
+
+    function handleRuleChange() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 룰을 바꿀 수 없습니다");
+        return;
+      }
+
+      if (ruleMode === "renju") {
+        ruleMode = "free";
+        resetGame("자유룰로 변경했습니다. 5개 이상 연결하면 승리합니다");
+      } else {
+        ruleMode = "renju";
+        resetGame("렌주룰로 변경했습니다. 흑은 33, 44, 6목 이상이 금지됩니다");
+      }
+    }
+
+    function handleForbiddenToggle() {
+      showForbidden = !showForbidden;
+      updateForbiddenText();
+      drawBoard();
+
+      if (showForbidden) {
+        if (ruleMode === "renju") {
+          setStatus("흑돌 금수 위치를 표시합니다");
+        } else {
+          setStatus("자유룰에서는 금수가 없습니다");
+        }
+      } else {
+        setStatus("금수 위치 표시를 끕니다");
+      }
+    }
+
+    function handleHint() {
+      if (isGameOver) {
+        setStatus("게임이 끝났습니다. 새 게임 또는 무르기를 사용할 수 있습니다");
+        return;
+      }
+
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 힌트를 볼 수 없습니다");
+        return;
+      }
+
+      if (currentPlayer !== humanPlayer) {
+        setStatus("지금은 AI 차례입니다");
+        return;
+      }
+
+      const winningMove = findWinningMove(humanPlayer);
+
+      if (winningMove !== null) {
+        hintPosition = winningMove;
+      } else {
+        const blockMove = findWinningMove(aiPlayer);
+
+        if (blockMove !== null) {
+          hintPosition = blockMove;
+        } else {
+          hintPosition = getBestScoredMove(humanPlayer, aiPlayer);
+        }
+      }
+
+      if (hintPosition === null) {
+        setStatus("추천할 수 있는 자리가 없습니다");
+        return;
+      }
+
+      drawBoard();
+      setStatus(`${hintPosition.row + 1}행 ${hintPosition.col + 1}열을 추천합니다`);
+    }
+
+    function handleUndo() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 무를 수 없습니다");
+        return;
+      }
+
+      if (moveHistory.length === 0) {
+        setStatus("무를 수 있는 수가 없습니다");
+        return;
+      }
+
+      if (
+        moveHistory.length === 1 &&
+        moveHistory[0].stone === aiPlayer &&
+        humanPlayer === WHITE
+      ) {
+        setStatus("첫 AI 수는 무를 수 없습니다. 새 게임 또는 흑/백 버튼을 사용하세요");
+        return;
+      }
+
+      if (isGameOver && recordedResult !== null) {
+        removeRecordedResult();
+      }
+
+      winningCells = [];
+      hintPosition = null;
+      isGameOver = false;
+
+      const lastMove = moveHistory[moveHistory.length - 1];
+
+      let undoCount = 1;
+
+      if (lastMove.stone === aiPlayer && moveHistory.length >= 2) {
+        undoCount = 2;
+      }
+
+      for (let i = 0; i < undoCount; i++) {
+        const move = moveHistory.pop();
+
+        if (move !== undefined) {
+          board[move.row][move.col] = EMPTY;
+        }
+      }
+
+      if (moveHistory.length > 0) {
+        const previousMove = moveHistory[moveHistory.length - 1];
+        lastPosition = {
+          row: previousMove.row,
+          col: previousMove.col,
+        };
+      } else {
+        lastPosition = null;
+      }
+
+      currentPlayer = humanPlayer;
+
+      updateTurnText();
+      updateMoveCountText();
+      drawBoard();
+
+      if (undoCount === 2) {
+        setStatus("플레이어 수와 AI 수를 한 번 무렀습니다");
+      } else {
+        setStatus("마지막 수를 무렀습니다");
+      }
+    }
+
+    function handleSaveGame() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 저장할 수 없습니다");
+        return;
+      }
+
+      const saveData = {
+        board,
+        difficulty,
+        ruleMode,
+        showCoordinates,
+        showForbidden,
+        humanPlayer,
+        aiPlayer,
+        currentPlayer,
+        lastPosition,
+        winningCells,
+        isGameOver,
+        moveHistory,
+        recordedResult,
+      };
+
+      localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+      setStatus("현재 게임을 저장했습니다");
+    }
+
+    function handleLoadGame() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 불러올 수 없습니다");
+        return;
+      }
+
+      const savedText = localStorage.getItem(SAVE_KEY);
+
+      if (savedText === null) {
+        setStatus("저장된 게임이 없습니다");
+        return;
+      }
+
+      try {
+        const savedData = JSON.parse(savedText);
+
+        if (!isValidSaveData(savedData)) {
+          setStatus("저장 데이터가 올바르지 않습니다");
+          return;
+        }
+
+        board = savedData.board;
+        difficulty = savedData.difficulty;
+        ruleMode = savedData.ruleMode || "renju";
+        showCoordinates = savedData.showCoordinates !== false;
+        showForbidden = savedData.showForbidden === true;
+        humanPlayer = savedData.humanPlayer;
+        aiPlayer = savedData.aiPlayer;
+        currentPlayer = savedData.currentPlayer;
+        lastPosition = savedData.lastPosition;
+        winningCells = savedData.winningCells;
+        isGameOver = savedData.isGameOver;
+        moveHistory = savedData.moveHistory;
+        recordedResult = savedData.recordedResult || null;
+
+        hintPosition = null;
+        isAiThinking = false;
+
+        updateDifficultyText();
+        updateRuleText();
+        updateForbiddenText();
+        updatePlayerText();
+        updateTurnText();
+        updateMoveCountText();
+        drawBoard();
+
+        setStatus("저장된 게임을 불러왔습니다");
+
+        if (!isGameOver && currentPlayer === aiPlayer) {
+          requestAiMove();
+        }
+      } catch (error) {
+        setStatus("저장된 게임을 불러오지 못했습니다");
+      }
+    }
+
+    function isValidSaveData(data) {
+      if (data === null || typeof data !== "object") {
+        return false;
+      }
+
+      if (!Array.isArray(data.board) || data.board.length !== BOARD_SIZE) {
+        return false;
+      }
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        if (!Array.isArray(data.board[row]) || data.board[row].length !== BOARD_SIZE) {
+          return false;
+        }
+
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          const value = data.board[row][col];
+
+          if (value !== EMPTY && value !== BLACK && value !== WHITE) {
+            return false;
+          }
+        }
+      }
+
+      if (!["Easy", "Normal", "Hard"].includes(data.difficulty)) {
+        return false;
+      }
+
+      if (data.ruleMode !== undefined && !["renju", "free"].includes(data.ruleMode)) {
+        return false;
+      }
+
+      if (![BLACK, WHITE].includes(data.humanPlayer)) {
+        return false;
+      }
+
+      if (![BLACK, WHITE].includes(data.aiPlayer)) {
+        return false;
+      }
+
+      if (![BLACK, WHITE].includes(data.currentPlayer)) {
+        return false;
+      }
+
+      if (!Array.isArray(data.moveHistory)) {
+        return false;
+      }
+
+      if (!Array.isArray(data.winningCells)) {
+        return false;
+      }
+
+      return true;
+    }
+
+    function handleToggleCoordinates() {
+      showCoordinates = !showCoordinates;
+      drawBoard();
+
+      if (showCoordinates) {
+        setStatus("오목판 좌표를 표시합니다");
+      } else {
+        setStatus("오목판 좌표를 숨겼습니다");
+      }
+    }
+
+    function handleHelp() {
+      const helpMessage =
+        "게임 방법\n\n" +
+        "1. 먼저 5개의 돌을 가로, 세로, 대각선으로 연결하면 승리합니다.\n" +
+        "2. 플레이어는 사람, 상대는 AI입니다.\n" +
+        "3. Easy는 랜덤 AI입니다.\n" +
+        "4. Normal은 이길 자리와 막을 자리를 찾습니다.\n" +
+        "5. Hard는 공격/방어 점수를 계산합니다.\n" +
+        "6. 렌주룰에서는 흑돌의 33, 44, 6목 이상이 금지됩니다.\n" +
+        "7. 금수 표시 버튼을 누르면 흑돌이 둘 수 없는 자리가 빨간 X로 표시됩니다.\n" +
+        "8. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
+        "9. 힌트는 현재 플레이어가 둘 만한 위치를 추천합니다.\n" +
+        "10. 무르기는 최근 플레이어 수와 AI 수를 되돌립니다.\n" +
+        "11. 전적은 브라우저에 자동 저장됩니다.\n" +
+        "12. 메뉴 열기/접기 버튼으로 스마트폰 화면을 넓게 쓸 수 있습니다.";
+
+      alert(helpMessage);
+    }
+
+    function handleResetRecord() {
+      const confirmed = confirm(
+        "전적을 모두 초기화할까요?\n\n플레이어 승리, AI 승리, 무승부 기록이 모두 0으로 돌아갑니다."
+      );
+
+      if (!confirmed) {
+        setStatus("전적 초기화를 취소했습니다");
+        return;
+      }
+
+      record = {
+        humanWin: 0,
+        aiWin: 0,
+        draw: 0,
+      };
+
+      recordedResult = null;
+
+      saveRecord();
+      updateRecordText();
+
+      setStatus("전적을 초기화했습니다");
+    }
+
+    function handleDeleteSaveData() {
+      const confirmed = confirm(
+        "저장된 게임을 삭제할까요?\n\n현재 진행 중인 화면은 유지되지만, 저장/불러오기 데이터는 삭제됩니다."
+      );
+
+      if (!confirmed) {
+        setStatus("저장 데이터 삭제를 취소했습니다");
+        return;
+      }
+
+      localStorage.removeItem(SAVE_KEY);
+      setStatus("저장된 게임 데이터를 삭제했습니다");
+    }
+
+    function handleToggleMenu() {
+      isMenuCollapsed = !isMenuCollapsed;
+      updateMenuState();
+
+      if (isMenuCollapsed) {
+        setStatus("하단 메뉴를 접었습니다");
+      } else {
+        setStatus("하단 메뉴를 펼쳤습니다");
+      }
+    }
+
+    function updateMenuState() {
+      if (isMenuCollapsed) {
+        bottomButtons.classList.add("collapsed");
+        appElement.classList.add("menu-collapsed");
+        menuToggleBtn.textContent = "메뉴 열기";
+      } else {
+        bottomButtons.classList.remove("collapsed");
+        appElement.classList.remove("menu-collapsed");
+        menuToggleBtn.textContent = "메뉴 접기";
+      }
+    }
+
+    canvas.addEventListener("pointerdown", handleCanvasPointerDown);
+
+    newGameBtn.addEventListener("click", handleNewGame);
+    difficultyBtn.addEventListener("click", handleDifficulty);
+    colorBtn.addEventListener("click", handleColorChange);
+    menuToggleBtn.addEventListener("click", handleToggleMenu);
+    ruleBtn.addEventListener("click", handleRuleChange);
+    forbiddenBtn.addEventListener("click", handleForbiddenToggle);
+    hintBtn.addEventListener("click", handleHint);
+    undoBtn.addEventListener("click", handleUndo);
+    saveBtn.addEventListener("click", handleSaveGame);
+    loadBtn.addEventListener("click", handleLoadGame);
+    coordBtn.addEventListener("click", handleToggleCoordinates);
+    helpBtn.addEventListener("click", handleHelp);
+    resetRecordBtn.addEventListener("click", handleResetRecord);
+    deleteSaveBtn.addEventListener("click", handleDeleteSaveData);
+
+    initCanvas();
+  </script>
+</body>
+</html>
