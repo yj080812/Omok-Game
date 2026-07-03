@@ -140,12 +140,13 @@
   <div class="app menu-collapsed">
     <header class="game-header">
       <h1>AI 오목 게임</h1>
-      <p id="status-text">17단계: 금수 위치 표시 준비 완료</p>
+      <p id="status-text">18단계: 수순 번호 표시 준비 완료</p>
 
       <div class="game-options">
         <span id="difficulty-text">난이도: Easy</span>
         <span id="rule-text">룰: 렌주룰</span>
         <span id="forbidden-text">금수 표시: 꺼짐</span>
+        <span id="number-text">수순 번호: 꺼짐</span>
         <span id="player-text">플레이어: 흑돌</span>
         <span id="turn-text">현재 차례: 흑돌</span>
         <span id="move-count-text">수순: 0수</span>
@@ -165,6 +166,7 @@
 
       <button id="rule-btn" class="secondary-button">룰</button>
       <button id="forbidden-btn" class="secondary-button">금수 표시</button>
+      <button id="number-btn" class="secondary-button">수순 번호</button>
       <button id="hint-btn" class="secondary-button">힌트</button>
       <button id="undo-btn" class="secondary-button">무르기</button>
       <button id="save-btn" class="secondary-button">저장</button>
@@ -187,6 +189,7 @@
     const difficultyText = document.getElementById("difficulty-text");
     const ruleText = document.getElementById("rule-text");
     const forbiddenText = document.getElementById("forbidden-text");
+    const numberText = document.getElementById("number-text");
     const playerText = document.getElementById("player-text");
     const turnText = document.getElementById("turn-text");
     const moveCountText = document.getElementById("move-count-text");
@@ -198,6 +201,7 @@
     const menuToggleBtn = document.getElementById("menu-toggle-btn");
     const ruleBtn = document.getElementById("rule-btn");
     const forbiddenBtn = document.getElementById("forbidden-btn");
+    const numberBtn = document.getElementById("number-btn");
     const hintBtn = document.getElementById("hint-btn");
     const undoBtn = document.getElementById("undo-btn");
     const saveBtn = document.getElementById("save-btn");
@@ -223,6 +227,7 @@
     let ruleMode = "renju";
     let showCoordinates = true;
     let showForbidden = false;
+    let showMoveNumbers = false;
     let isMenuCollapsed = true;
 
     let humanPlayer = BLACK;
@@ -254,6 +259,7 @@
       updateDifficultyText();
       updateRuleText();
       updateForbiddenText();
+      updateMoveNumberText();
       updatePlayerText();
       updateTurnText();
       updateMoveCountText();
@@ -275,6 +281,7 @@
       drawStarPoints();
       drawForbiddenPositions();
       drawStones();
+      drawMoveNumbers();
       drawHintPosition();
       drawWinningLine();
       drawLastPosition();
@@ -349,11 +356,7 @@
     }
 
     function drawForbiddenPositions() {
-      if (!showForbidden) {
-        return;
-      }
-
-      if (ruleMode !== "renju") {
+      if (!showForbidden || ruleMode !== "renju") {
         return;
       }
 
@@ -393,8 +396,8 @@
         }
       }
 
-      ctx.textBaseline = "alphabetic";
       ctx.restore();
+      ctx.textBaseline = "alphabetic";
     }
 
     function drawStones() {
@@ -428,6 +431,34 @@
       ctx.strokeStyle = "#222222";
       ctx.lineWidth = 2;
       ctx.stroke();
+    }
+
+    function drawMoveNumbers() {
+      if (!showMoveNumbers) {
+        return;
+      }
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "bold 14px Arial";
+
+      for (let i = 0; i < moveHistory.length; i++) {
+        const move = moveHistory[i];
+        const x = MARGIN + move.col * CELL_SIZE;
+        const y = MARGIN + move.row * CELL_SIZE;
+
+        if (move.stone === BLACK) {
+          ctx.fillStyle = "#ffffff";
+        } else {
+          ctx.fillStyle = "#111111";
+        }
+
+        ctx.fillText(String(i + 1), x, y);
+      }
+
+      ctx.restore();
+      ctx.textBaseline = "alphabetic";
     }
 
     function drawHintPosition() {
@@ -1281,6 +1312,14 @@
       }
     }
 
+    function updateMoveNumberText() {
+      if (showMoveNumbers) {
+        numberText.textContent = "수순 번호: 켜짐";
+      } else {
+        numberText.textContent = "수순 번호: 꺼짐";
+      }
+    }
+
     function updateTurnText() {
       if (isGameOver) {
         turnText.textContent = "게임 종료";
@@ -1407,6 +1446,7 @@
       updateDifficultyText();
       updateRuleText();
       updateForbiddenText();
+      updateMoveNumberText();
       updatePlayerText();
       updateTurnText();
       updateMoveCountText();
@@ -1487,6 +1527,18 @@
         }
       } else {
         setStatus("금수 위치 표시를 끕니다");
+      }
+    }
+
+    function handleMoveNumberToggle() {
+      showMoveNumbers = !showMoveNumbers;
+      updateMoveNumberText();
+      drawBoard();
+
+      if (showMoveNumbers) {
+        setStatus("돌 위에 수순 번호를 표시합니다");
+      } else {
+        setStatus("수순 번호 표시를 끕니다");
       }
     }
 
@@ -1608,6 +1660,7 @@
         ruleMode,
         showCoordinates,
         showForbidden,
+        showMoveNumbers,
         humanPlayer,
         aiPlayer,
         currentPlayer,
@@ -1648,6 +1701,7 @@
         ruleMode = savedData.ruleMode || "renju";
         showCoordinates = savedData.showCoordinates !== false;
         showForbidden = savedData.showForbidden === true;
+        showMoveNumbers = savedData.showMoveNumbers === true;
         humanPlayer = savedData.humanPlayer;
         aiPlayer = savedData.aiPlayer;
         currentPlayer = savedData.currentPlayer;
@@ -1663,6 +1717,7 @@
         updateDifficultyText();
         updateRuleText();
         updateForbiddenText();
+        updateMoveNumberText();
         updatePlayerText();
         updateTurnText();
         updateMoveCountText();
@@ -1753,11 +1808,12 @@
         "5. Hard는 공격/방어 점수를 계산합니다.\n" +
         "6. 렌주룰에서는 흑돌의 33, 44, 6목 이상이 금지됩니다.\n" +
         "7. 금수 표시 버튼을 누르면 흑돌이 둘 수 없는 자리가 빨간 X로 표시됩니다.\n" +
-        "8. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
-        "9. 힌트는 현재 플레이어가 둘 만한 위치를 추천합니다.\n" +
-        "10. 무르기는 최근 플레이어 수와 AI 수를 되돌립니다.\n" +
-        "11. 전적은 브라우저에 자동 저장됩니다.\n" +
-        "12. 메뉴 열기/접기 버튼으로 스마트폰 화면을 넓게 쓸 수 있습니다.";
+        "8. 수순 번호 버튼을 누르면 돌 위에 몇 번째 수인지 표시됩니다.\n" +
+        "9. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
+        "10. 힌트는 현재 플레이어가 둘 만한 위치를 추천합니다.\n" +
+        "11. 무르기는 최근 플레이어 수와 AI 수를 되돌립니다.\n" +
+        "12. 전적은 브라우저에 자동 저장됩니다.\n" +
+        "13. 메뉴 열기/접기 버튼으로 스마트폰 화면을 넓게 쓸 수 있습니다.";
 
       alert(helpMessage);
     }
@@ -1831,6 +1887,7 @@
     menuToggleBtn.addEventListener("click", handleToggleMenu);
     ruleBtn.addEventListener("click", handleRuleChange);
     forbiddenBtn.addEventListener("click", handleForbiddenToggle);
+    numberBtn.addEventListener("click", handleMoveNumberToggle);
     hintBtn.addEventListener("click", handleHint);
     undoBtn.addEventListener("click", handleUndo);
     saveBtn.addEventListener("click", handleSaveGame);
