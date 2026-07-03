@@ -140,10 +140,11 @@
   <div class="app menu-collapsed">
     <header class="game-header">
       <h1>AI 오목 게임</h1>
-      <p id="status-text">18단계: 수순 번호 표시 준비 완료</p>
+      <p id="status-text">판 크기 조절 기능 준비 완료</p>
 
       <div class="game-options">
         <span id="difficulty-text">난이도: Easy</span>
+        <span id="board-size-text">판 크기: 15 x 15</span>
         <span id="rule-text">룰: 렌주룰</span>
         <span id="forbidden-text">금수 표시: 꺼짐</span>
         <span id="number-text">수순 번호: 꺼짐</span>
@@ -164,6 +165,7 @@
       <button id="color-btn">흑/백</button>
       <button id="menu-toggle-btn">메뉴 열기</button>
 
+      <button id="board-size-btn" class="secondary-button">판 크기</button>
       <button id="rule-btn" class="secondary-button">룰</button>
       <button id="forbidden-btn" class="secondary-button">금수 표시</button>
       <button id="number-btn" class="secondary-button">수순 번호</button>
@@ -187,6 +189,7 @@
 
     const statusText = document.getElementById("status-text");
     const difficultyText = document.getElementById("difficulty-text");
+    const boardSizeText = document.getElementById("board-size-text");
     const ruleText = document.getElementById("rule-text");
     const forbiddenText = document.getElementById("forbidden-text");
     const numberText = document.getElementById("number-text");
@@ -199,6 +202,7 @@
     const difficultyBtn = document.getElementById("difficulty-btn");
     const colorBtn = document.getElementById("color-btn");
     const menuToggleBtn = document.getElementById("menu-toggle-btn");
+    const boardSizeBtn = document.getElementById("board-size-btn");
     const ruleBtn = document.getElementById("rule-btn");
     const forbiddenBtn = document.getElementById("forbidden-btn");
     const numberBtn = document.getElementById("number-btn");
@@ -212,9 +216,11 @@
     const deleteSaveBtn = document.getElementById("delete-save-btn");
 
     const CANVAS_SIZE = 640;
-    const BOARD_SIZE = 15;
-    const MARGIN = 40;
-    const CELL_SIZE = (CANVAS_SIZE - MARGIN * 2) / (BOARD_SIZE - 1);
+    const BOARD_SIZE_OPTIONS = [13, 15, 19];
+
+    let boardSize = 15;
+    let margin = 40;
+    let cellSize = calculateCellSize();
 
     const EMPTY = 0;
     const BLACK = 1;
@@ -246,9 +252,18 @@
     let board = createEmptyBoard();
     let record = loadRecord();
 
+    function calculateCellSize() {
+      return (CANVAS_SIZE - margin * 2) / (boardSize - 1);
+    }
+
+    function refreshBoardMetrics() {
+      margin = boardSize >= 19 ? 34 : 40;
+      cellSize = calculateCellSize();
+    }
+
     function createEmptyBoard() {
-      return Array.from({ length: BOARD_SIZE }, () => {
-        return Array(BOARD_SIZE).fill(EMPTY);
+      return Array.from({ length: boardSize }, () => {
+        return Array(boardSize).fill(EMPTY);
       });
     }
 
@@ -256,7 +271,9 @@
       canvas.width = CANVAS_SIZE;
       canvas.height = CANVAS_SIZE;
 
+      refreshBoardMetrics();
       updateDifficultyText();
+      updateBoardSizeText();
       updateRuleText();
       updateForbiddenText();
       updateMoveNumberText();
@@ -294,24 +311,20 @@
 
     function drawCoordinates() {
       ctx.fillStyle = "#3b2412";
-      ctx.font = "bold 15px Arial";
+      ctx.font = boardSize >= 19 ? "bold 12px Arial" : "bold 15px Arial";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      const columnLabels = [
-        "A", "B", "C", "D", "E",
-        "F", "G", "H", "I", "J",
-        "K", "L", "M", "N", "O"
-      ];
+      const columnLabels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-      for (let i = 0; i < BOARD_SIZE; i++) {
-        const position = MARGIN + i * CELL_SIZE;
+      for (let i = 0; i < boardSize; i++) {
+        const position = margin + i * cellSize;
 
-        ctx.fillText(columnLabels[i], position, MARGIN - 20);
-        ctx.fillText(columnLabels[i], position, CANVAS_SIZE - MARGIN + 20);
+        ctx.fillText(columnLabels[i], position, margin - 20);
+        ctx.fillText(columnLabels[i], position, CANVAS_SIZE - margin + 20);
 
-        ctx.fillText(String(i + 1), MARGIN - 20, position);
-        ctx.fillText(String(i + 1), CANVAS_SIZE - MARGIN + 20, position);
+        ctx.fillText(String(i + 1), margin - 20, position);
+        ctx.fillText(String(i + 1), CANVAS_SIZE - margin + 20, position);
       }
 
       ctx.textBaseline = "alphabetic";
@@ -321,38 +334,58 @@
       ctx.strokeStyle = "#3b2412";
       ctx.lineWidth = 1.5;
 
-      for (let i = 0; i < BOARD_SIZE; i++) {
-        const position = MARGIN + i * CELL_SIZE;
+      for (let i = 0; i < boardSize; i++) {
+        const position = margin + i * cellSize;
 
         ctx.beginPath();
-        ctx.moveTo(MARGIN, position);
-        ctx.lineTo(CANVAS_SIZE - MARGIN, position);
+        ctx.moveTo(margin, position);
+        ctx.lineTo(CANVAS_SIZE - margin, position);
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.moveTo(position, MARGIN);
-        ctx.lineTo(position, CANVAS_SIZE - MARGIN);
+        ctx.moveTo(position, margin);
+        ctx.lineTo(position, CANVAS_SIZE - margin);
         ctx.stroke();
       }
     }
 
     function drawStarPoints() {
-      const starPoints = [
-        [3, 3], [3, 7], [3, 11],
-        [7, 3], [7, 7], [7, 11],
-        [11, 3], [11, 7], [11, 11],
-      ];
+      const starPoints = getStarPoints();
 
       ctx.fillStyle = "#3b2412";
 
       for (const [row, col] of starPoints) {
-        const x = MARGIN + col * CELL_SIZE;
-        const y = MARGIN + row * CELL_SIZE;
+        const x = margin + col * cellSize;
+        const y = margin + row * cellSize;
 
         ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.arc(x, y, boardSize >= 19 ? 4 : 5, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    function getStarPoints() {
+      if (boardSize === 13) {
+        return [
+          [3, 3], [3, 6], [3, 9],
+          [6, 3], [6, 6], [6, 9],
+          [9, 3], [9, 6], [9, 9],
+        ];
+      }
+
+      if (boardSize === 19) {
+        return [
+          [3, 3], [3, 9], [3, 15],
+          [9, 3], [9, 9], [9, 15],
+          [15, 3], [15, 9], [15, 15],
+        ];
+      }
+
+      return [
+        [3, 3], [3, 7], [3, 11],
+        [7, 3], [7, 7], [7, 11],
+        [11, 3], [11, 7], [11, 11],
+      ];
     }
 
     function drawForbiddenPositions() {
@@ -362,8 +395,8 @@
 
       ctx.save();
 
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
           if (board[row][col] !== EMPTY) {
             continue;
           }
@@ -374,9 +407,9 @@
             continue;
           }
 
-          const x = MARGIN + col * CELL_SIZE;
-          const y = MARGIN + row * CELL_SIZE;
-          const size = CELL_SIZE * 0.22;
+          const x = margin + col * cellSize;
+          const y = margin + row * cellSize;
+          const size = cellSize * 0.22;
 
           ctx.strokeStyle = "rgba(220, 0, 0, 0.75)";
           ctx.lineWidth = 3;
@@ -389,10 +422,10 @@
           ctx.stroke();
 
           ctx.fillStyle = "rgba(220, 0, 0, 0.85)";
-          ctx.font = "bold 12px Arial";
+          ctx.font = boardSize >= 19 ? "bold 10px Arial" : "bold 12px Arial";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText("금", x, y - CELL_SIZE * 0.35);
+          ctx.fillText("금", x, y - cellSize * 0.35);
         }
       }
 
@@ -401,8 +434,8 @@
     }
 
     function drawStones() {
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
           const stone = board[row][col];
 
           if (stone !== EMPTY) {
@@ -413,9 +446,9 @@
     }
 
     function drawStone(row, col, stone) {
-      const x = MARGIN + col * CELL_SIZE;
-      const y = MARGIN + row * CELL_SIZE;
-      const radius = CELL_SIZE * 0.38;
+      const x = margin + col * cellSize;
+      const y = margin + row * cellSize;
+      const radius = cellSize * 0.38;
 
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -441,12 +474,12 @@
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = "bold 14px Arial";
+      ctx.font = boardSize >= 19 ? "bold 10px Arial" : "bold 14px Arial";
 
       for (let i = 0; i < moveHistory.length; i++) {
         const move = moveHistory[i];
-        const x = MARGIN + move.col * CELL_SIZE;
-        const y = MARGIN + move.row * CELL_SIZE;
+        const x = margin + move.col * cellSize;
+        const y = margin + move.row * cellSize;
 
         if (move.stone === BLACK) {
           ctx.fillStyle = "#ffffff";
@@ -467,18 +500,18 @@
       }
 
       const { row, col } = hintPosition;
-      const x = MARGIN + col * CELL_SIZE;
-      const y = MARGIN + row * CELL_SIZE;
+      const x = margin + col * cellSize;
+      const y = margin + row * cellSize;
 
       ctx.strokeStyle = "#0077ff";
       ctx.lineWidth = 4;
 
       ctx.beginPath();
-      ctx.arc(x, y, CELL_SIZE * 0.43, 0, Math.PI * 2);
+      ctx.arc(x, y, cellSize * 0.43, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.fillStyle = "#0077ff";
-      ctx.font = "bold 18px Arial";
+      ctx.font = boardSize >= 19 ? "bold 14px Arial" : "bold 18px Arial";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("?", x, y);
@@ -493,10 +526,10 @@
       const firstCell = winningCells[0];
       const lastCell = winningCells[winningCells.length - 1];
 
-      const startX = MARGIN + firstCell.col * CELL_SIZE;
-      const startY = MARGIN + firstCell.row * CELL_SIZE;
-      const endX = MARGIN + lastCell.col * CELL_SIZE;
-      const endY = MARGIN + lastCell.row * CELL_SIZE;
+      const startX = margin + firstCell.col * cellSize;
+      const startY = margin + firstCell.row * cellSize;
+      const endX = margin + lastCell.col * cellSize;
+      const endY = margin + lastCell.row * cellSize;
 
       ctx.strokeStyle = "#e60000";
       ctx.lineWidth = 7;
@@ -516,17 +549,18 @@
       }
 
       const { row, col } = lastPosition;
-      const x = MARGIN + col * CELL_SIZE;
-      const y = MARGIN + row * CELL_SIZE;
+      const x = margin + col * cellSize;
+      const y = margin + row * cellSize;
+      const markSize = Math.max(5, cellSize * 0.25);
 
       ctx.strokeStyle = "red";
       ctx.lineWidth = 3;
 
       ctx.beginPath();
-      ctx.moveTo(x - 8, y);
-      ctx.lineTo(x + 8, y);
-      ctx.moveTo(x, y - 8);
-      ctx.lineTo(x, y + 8);
+      ctx.moveTo(x - markSize, y);
+      ctx.lineTo(x + markSize, y);
+      ctx.moveTo(x, y - markSize);
+      ctx.lineTo(x, y + markSize);
       ctx.stroke();
     }
 
@@ -539,24 +573,24 @@
       const canvasX = (event.clientX - rect.left) * scaleX;
       const canvasY = (event.clientY - rect.top) * scaleY;
 
-      const col = Math.round((canvasX - MARGIN) / CELL_SIZE);
-      const row = Math.round((canvasY - MARGIN) / CELL_SIZE);
+      const col = Math.round((canvasX - margin) / cellSize);
+      const row = Math.round((canvasY - margin) / cellSize);
 
       if (
         row < 0 ||
-        row >= BOARD_SIZE ||
+        row >= boardSize ||
         col < 0 ||
-        col >= BOARD_SIZE
+        col >= boardSize
       ) {
         return null;
       }
 
-      const nearestX = MARGIN + col * CELL_SIZE;
-      const nearestY = MARGIN + row * CELL_SIZE;
+      const nearestX = margin + col * cellSize;
+      const nearestY = margin + row * cellSize;
       const distanceX = Math.abs(canvasX - nearestX);
       const distanceY = Math.abs(canvasY - nearestY);
 
-      if (distanceX > CELL_SIZE / 2 || distanceY > CELL_SIZE / 2) {
+      if (distanceX > cellSize / 2 || distanceY > cellSize / 2) {
         return null;
       }
 
@@ -804,13 +838,14 @@
 
     function getCandidateMoves() {
       if (isBoardEmpty()) {
-        return [{ row: 7, col: 7 }];
+        const center = Math.floor(boardSize / 2);
+        return [{ row: center, col: center }];
       }
 
       const candidateMap = new Map();
 
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
           if (board[row][col] === EMPTY) {
             continue;
           }
@@ -943,7 +978,7 @@
     }
 
     function getCenterScore(row, col) {
-      const center = Math.floor(BOARD_SIZE / 2);
+      const center = Math.floor(boardSize / 2);
       const distance = Math.abs(row - center) + Math.abs(col - center);
 
       return Math.max(0, 30 - distance * 2);
@@ -959,7 +994,10 @@
       }
 
       if (isBoardEmpty()) {
-        const centerMove = legalCells.find((cell) => cell.row === 7 && cell.col === 7);
+        const center = Math.floor(boardSize / 2);
+        const centerMove = legalCells.find((cell) => {
+          return cell.row === center && cell.col === center;
+        });
 
         if (centerMove !== undefined) {
           return centerMove;
@@ -973,8 +1011,8 @@
     function getAllEmptyCells() {
       const emptyCells = [];
 
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
           if (board[row][col] === EMPTY) {
             emptyCells.push({ row, col });
           }
@@ -1249,12 +1287,12 @@
     }
 
     function isInsideBoard(row, col) {
-      return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
+      return row >= 0 && row < boardSize && col >= 0 && col < boardSize;
     }
 
     function isBoardFull() {
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
           if (board[row][col] === EMPTY) {
             return false;
           }
@@ -1265,8 +1303,8 @@
     }
 
     function isBoardEmpty() {
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
           if (board[row][col] !== EMPTY) {
             return false;
           }
@@ -1294,6 +1332,10 @@
 
     function updateDifficultyText() {
       difficultyText.textContent = `난이도: ${difficulty}`;
+    }
+
+    function updateBoardSizeText() {
+      boardSizeText.textContent = `판 크기: ${boardSize} x ${boardSize}`;
     }
 
     function updateRuleText() {
@@ -1433,6 +1475,8 @@
     }
 
     function resetGame(message) {
+      refreshBoardMetrics();
+
       board = createEmptyBoard();
       currentPlayer = BLACK;
       lastPosition = null;
@@ -1444,6 +1488,7 @@
       recordedResult = null;
 
       updateDifficultyText();
+      updateBoardSizeText();
       updateRuleText();
       updateForbiddenText();
       updateMoveNumberText();
@@ -1460,6 +1505,20 @@
 
     function handleNewGame() {
       resetGame("새 게임을 시작합니다");
+    }
+
+    function handleBoardSizeChange() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 판 크기를 바꿀 수 없습니다");
+        return;
+      }
+
+      const currentIndex = BOARD_SIZE_OPTIONS.indexOf(boardSize);
+      const nextIndex = (currentIndex + 1) % BOARD_SIZE_OPTIONS.length;
+
+      boardSize = BOARD_SIZE_OPTIONS[nextIndex];
+
+      resetGame(`${boardSize} x ${boardSize} 판으로 변경했습니다`);
     }
 
     function handleDifficulty() {
@@ -1655,6 +1714,7 @@
       }
 
       const saveData = {
+        boardSize,
         board,
         difficulty,
         ruleMode,
@@ -1691,6 +1751,19 @@
       try {
         const savedData = JSON.parse(savedText);
 
+        if (typeof savedData.boardSize === "number") {
+          boardSize = savedData.boardSize;
+        } else if (Array.isArray(savedData.board)) {
+          boardSize = savedData.board.length;
+        }
+
+        if (!BOARD_SIZE_OPTIONS.includes(boardSize)) {
+          setStatus("저장된 판 크기가 지원되지 않습니다");
+          return;
+        }
+
+        refreshBoardMetrics();
+
         if (!isValidSaveData(savedData)) {
           setStatus("저장 데이터가 올바르지 않습니다");
           return;
@@ -1715,6 +1788,7 @@
         isAiThinking = false;
 
         updateDifficultyText();
+        updateBoardSizeText();
         updateRuleText();
         updateForbiddenText();
         updateMoveNumberText();
@@ -1738,16 +1812,16 @@
         return false;
       }
 
-      if (!Array.isArray(data.board) || data.board.length !== BOARD_SIZE) {
+      if (!Array.isArray(data.board) || data.board.length !== boardSize) {
         return false;
       }
 
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        if (!Array.isArray(data.board[row]) || data.board[row].length !== BOARD_SIZE) {
+      for (let row = 0; row < boardSize; row++) {
+        if (!Array.isArray(data.board[row]) || data.board[row].length !== boardSize) {
           return false;
         }
 
-        for (let col = 0; col < BOARD_SIZE; col++) {
+        for (let col = 0; col < boardSize; col++) {
           const value = data.board[row][col];
 
           if (value !== EMPTY && value !== BLACK && value !== WHITE) {
@@ -1803,17 +1877,18 @@
         "게임 방법\n\n" +
         "1. 먼저 5개의 돌을 가로, 세로, 대각선으로 연결하면 승리합니다.\n" +
         "2. 플레이어는 사람, 상대는 AI입니다.\n" +
-        "3. Easy는 랜덤 AI입니다.\n" +
-        "4. Normal은 이길 자리와 막을 자리를 찾습니다.\n" +
-        "5. Hard는 공격/방어 점수를 계산합니다.\n" +
-        "6. 렌주룰에서는 흑돌의 33, 44, 6목 이상이 금지됩니다.\n" +
-        "7. 금수 표시 버튼을 누르면 흑돌이 둘 수 없는 자리가 빨간 X로 표시됩니다.\n" +
-        "8. 수순 번호 버튼을 누르면 돌 위에 몇 번째 수인지 표시됩니다.\n" +
-        "9. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
-        "10. 힌트는 현재 플레이어가 둘 만한 위치를 추천합니다.\n" +
-        "11. 무르기는 최근 플레이어 수와 AI 수를 되돌립니다.\n" +
-        "12. 전적은 브라우저에 자동 저장됩니다.\n" +
-        "13. 메뉴 열기/접기 버튼으로 스마트폰 화면을 넓게 쓸 수 있습니다.";
+        "3. 판 크기 버튼으로 13x13, 15x15, 19x19를 바꿀 수 있습니다.\n" +
+        "4. Easy는 랜덤 AI입니다.\n" +
+        "5. Normal은 이길 자리와 막을 자리를 찾습니다.\n" +
+        "6. Hard는 공격/방어 점수를 계산합니다.\n" +
+        "7. 렌주룰에서는 흑돌의 33, 44, 6목 이상이 금지됩니다.\n" +
+        "8. 금수 표시 버튼을 누르면 흑돌이 둘 수 없는 자리가 빨간 X로 표시됩니다.\n" +
+        "9. 수순 번호 버튼을 누르면 돌 위에 몇 번째 수인지 표시됩니다.\n" +
+        "10. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
+        "11. 힌트는 현재 플레이어가 둘 만한 위치를 추천합니다.\n" +
+        "12. 무르기는 최근 플레이어 수와 AI 수를 되돌립니다.\n" +
+        "13. 전적은 브라우저에 자동 저장됩니다.\n" +
+        "14. 메뉴 열기/접기 버튼으로 스마트폰 화면을 넓게 쓸 수 있습니다.";
 
       alert(helpMessage);
     }
@@ -1885,6 +1960,7 @@
     difficultyBtn.addEventListener("click", handleDifficulty);
     colorBtn.addEventListener("click", handleColorChange);
     menuToggleBtn.addEventListener("click", handleToggleMenu);
+    boardSizeBtn.addEventListener("click", handleBoardSizeChange);
     ruleBtn.addEventListener("click", handleRuleChange);
     forbiddenBtn.addEventListener("click", handleForbiddenToggle);
     numberBtn.addEventListener("click", handleMoveNumberToggle);
