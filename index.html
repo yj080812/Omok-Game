@@ -3,12 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI 오목 게임</title>
-
+  <title>오목 게임</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -18,7 +15,7 @@
 
     .app {
       min-height: 100vh;
-      padding: 20px 16px 240px;
+      padding: 20px 16px 250px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -30,7 +27,7 @@
 
     .game-header {
       width: 100%;
-      max-width: 680px;
+      max-width: 720px;
       text-align: center;
       margin-bottom: 16px;
     }
@@ -48,7 +45,7 @@
     .game-options {
       display: flex;
       justify-content: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
       font-size: 14px;
     }
@@ -121,17 +118,9 @@
     }
 
     @media (max-width: 420px) {
-      .app {
-        padding-top: 14px;
-      }
-
-      .game-header h1 {
-        font-size: 24px;
-      }
-
-      .bottom-buttons {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      .app { padding-top: 14px; }
+      .game-header h1 { font-size: 24px; }
+      .bottom-buttons { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -139,11 +128,12 @@
 <body>
   <div class="app menu-collapsed">
     <header class="game-header">
-      <h1>AI 오목 게임</h1>
-      <p id="status-text">판 크기 조절 기능 준비 완료</p>
+      <h1>오목 게임</h1>
+      <p id="status-text">친구 대전 / AI 대전 선택 가능</p>
 
       <div class="game-options">
-        <span id="difficulty-text">난이도: Easy</span>
+        <span id="mode-text">모드: AI 대전</span>
+        <span id="difficulty-text">난이도: Very Easy</span>
         <span id="board-size-text">판 크기: 15 x 15</span>
         <span id="rule-text">룰: 렌주룰</span>
         <span id="forbidden-text">금수 표시: 꺼짐</span>
@@ -161,6 +151,7 @@
 
     <nav id="bottom-buttons" class="bottom-buttons collapsed">
       <button id="new-game-btn">새 게임</button>
+      <button id="mode-btn">모드</button>
       <button id="difficulty-btn">난이도</button>
       <button id="color-btn">흑/백</button>
       <button id="menu-toggle-btn">메뉴 열기</button>
@@ -188,6 +179,7 @@
     const ctx = canvas.getContext("2d");
 
     const statusText = document.getElementById("status-text");
+    const modeText = document.getElementById("mode-text");
     const difficultyText = document.getElementById("difficulty-text");
     const boardSizeText = document.getElementById("board-size-text");
     const ruleText = document.getElementById("rule-text");
@@ -199,6 +191,7 @@
     const recordText = document.getElementById("record-text");
 
     const newGameBtn = document.getElementById("new-game-btn");
+    const modeBtn = document.getElementById("mode-btn");
     const difficultyBtn = document.getElementById("difficulty-btn");
     const colorBtn = document.getElementById("color-btn");
     const menuToggleBtn = document.getElementById("menu-toggle-btn");
@@ -217,19 +210,21 @@
 
     const CANVAS_SIZE = 640;
     const BOARD_SIZE_OPTIONS = [13, 15, 19];
-
-    let boardSize = 15;
-    let margin = 40;
-    let cellSize = calculateCellSize();
+    const DIFFICULTY_OPTIONS = ["Very Easy", "Easy", "Normal", "Hard", "Expert"];
 
     const EMPTY = 0;
     const BLACK = 1;
     const WHITE = 2;
 
-    const SAVE_KEY = "omok-ai-save-data";
-    const RECORD_KEY = "omok-ai-record-data";
+    const SAVE_KEY = "omok-save-data-v2";
+    const RECORD_KEY = "omok-record-data-v2";
 
-    let difficulty = "Easy";
+    let boardSize = 15;
+    let margin = 40;
+    let cellSize = calculateCellSize();
+
+    let gameMode = "ai";
+    let difficulty = "Very Easy";
     let ruleMode = "renju";
     let showCoordinates = true;
     let showForbidden = false;
@@ -262,16 +257,20 @@
     }
 
     function createEmptyBoard() {
-      return Array.from({ length: boardSize }, () => {
-        return Array(boardSize).fill(EMPTY);
-      });
+      return Array.from({ length: boardSize }, () => Array(boardSize).fill(EMPTY));
     }
 
     function initCanvas() {
       canvas.width = CANVAS_SIZE;
       canvas.height = CANVAS_SIZE;
-
       refreshBoardMetrics();
+      updateAllTexts();
+      updateMenuState();
+      drawBoard();
+    }
+
+    function updateAllTexts() {
+      updateModeText();
       updateDifficultyText();
       updateBoardSizeText();
       updateRuleText();
@@ -281,19 +280,12 @@
       updateTurnText();
       updateMoveCountText();
       updateRecordText();
-      updateMenuState();
-      drawBoard();
     }
 
     function drawBoard() {
       ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
       drawBoardBackground();
-
-      if (showCoordinates) {
-        drawCoordinates();
-      }
-
+      if (showCoordinates) drawCoordinates();
       drawGridLines();
       drawStarPoints();
       drawForbiddenPositions();
@@ -322,7 +314,6 @@
 
         ctx.fillText(columnLabels[i], position, margin - 20);
         ctx.fillText(columnLabels[i], position, CANVAS_SIZE - margin + 20);
-
         ctx.fillText(String(i + 1), margin - 20, position);
         ctx.fillText(String(i + 1), CANVAS_SIZE - margin + 20, position);
       }
@@ -351,7 +342,6 @@
 
     function drawStarPoints() {
       const starPoints = getStarPoints();
-
       ctx.fillStyle = "#3b2412";
 
       for (const [row, col] of starPoints) {
@@ -389,23 +379,16 @@
     }
 
     function drawForbiddenPositions() {
-      if (!showForbidden || ruleMode !== "renju") {
-        return;
-      }
+      if (!showForbidden || ruleMode !== "renju") return;
 
       ctx.save();
 
       for (let row = 0; row < boardSize; row++) {
         for (let col = 0; col < boardSize; col++) {
-          if (board[row][col] !== EMPTY) {
-            continue;
-          }
+          if (board[row][col] !== EMPTY) continue;
 
           const reason = getForbiddenReason(row, col, BLACK);
-
-          if (reason === null) {
-            continue;
-          }
+          if (reason === null) continue;
 
           const x = margin + col * cellSize;
           const y = margin + row * cellSize;
@@ -437,10 +420,7 @@
       for (let row = 0; row < boardSize; row++) {
         for (let col = 0; col < boardSize; col++) {
           const stone = board[row][col];
-
-          if (stone !== EMPTY) {
-            drawStone(row, col, stone);
-          }
+          if (stone !== EMPTY) drawStone(row, col, stone);
         }
       }
     }
@@ -452,13 +432,7 @@
 
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
-
-      if (stone === BLACK) {
-        ctx.fillStyle = "#111111";
-      } else {
-        ctx.fillStyle = "#f8f8f8";
-      }
-
+      ctx.fillStyle = stone === BLACK ? "#111111" : "#f8f8f8";
       ctx.fill();
 
       ctx.strokeStyle = "#222222";
@@ -467,9 +441,7 @@
     }
 
     function drawMoveNumbers() {
-      if (!showMoveNumbers) {
-        return;
-      }
+      if (!showMoveNumbers) return;
 
       ctx.save();
       ctx.textAlign = "center";
@@ -481,12 +453,7 @@
         const x = margin + move.col * cellSize;
         const y = margin + move.row * cellSize;
 
-        if (move.stone === BLACK) {
-          ctx.fillStyle = "#ffffff";
-        } else {
-          ctx.fillStyle = "#111111";
-        }
-
+        ctx.fillStyle = move.stone === BLACK ? "#ffffff" : "#111111";
         ctx.fillText(String(i + 1), x, y);
       }
 
@@ -495,9 +462,7 @@
     }
 
     function drawHintPosition() {
-      if (hintPosition === null || isGameOver) {
-        return;
-      }
+      if (hintPosition === null || isGameOver) return;
 
       const { row, col } = hintPosition;
       const x = margin + col * cellSize;
@@ -519,9 +484,7 @@
     }
 
     function drawWinningLine() {
-      if (winningCells.length < 5) {
-        return;
-      }
+      if (winningCells.length < 5) return;
 
       const firstCell = winningCells[0];
       const lastCell = winningCells[winningCells.length - 1];
@@ -544,9 +507,7 @@
     }
 
     function drawLastPosition() {
-      if (lastPosition === null || isGameOver) {
-        return;
-      }
+      if (lastPosition === null || isGameOver) return;
 
       const { row, col } = lastPosition;
       const x = margin + col * cellSize;
@@ -576,23 +537,14 @@
       const col = Math.round((canvasX - margin) / cellSize);
       const row = Math.round((canvasY - margin) / cellSize);
 
-      if (
-        row < 0 ||
-        row >= boardSize ||
-        col < 0 ||
-        col >= boardSize
-      ) {
-        return null;
-      }
+      if (row < 0 || row >= boardSize || col < 0 || col >= boardSize) return null;
 
       const nearestX = margin + col * cellSize;
       const nearestY = margin + row * cellSize;
       const distanceX = Math.abs(canvasX - nearestX);
       const distanceY = Math.abs(canvasY - nearestY);
 
-      if (distanceX > cellSize / 2 || distanceY > cellSize / 2) {
-        return null;
-      }
+      if (distanceX > cellSize / 2 || distanceY > cellSize / 2) return null;
 
       return { row, col };
     }
@@ -610,7 +562,7 @@
         return;
       }
 
-      if (currentPlayer !== humanPlayer) {
+      if (gameMode === "ai" && currentPlayer !== humanPlayer) {
         setStatus("지금은 AI 차례입니다");
         return;
       }
@@ -629,16 +581,16 @@
         return;
       }
 
-      const forbiddenReason = getForbiddenReason(row, col, humanPlayer);
+      const forbiddenReason = getForbiddenReason(row, col, currentPlayer);
 
       if (forbiddenReason !== null) {
         setStatus(`금수입니다: ${forbiddenReason}`);
         return;
       }
 
-      makeMove(row, col, humanPlayer);
+      makeMove(row, col, currentPlayer);
 
-      if (!isGameOver) {
+      if (!isGameOver && gameMode === "ai") {
         requestAiMove();
       }
     }
@@ -657,12 +609,16 @@
         winningCells = winResult;
         isGameOver = true;
 
-        if (stone === humanPlayer) {
-          recordGameResult("human");
-          setStatus(`플레이어 ${getStoneName(stone)} 승리! 전적이 기록되었습니다`);
+        if (gameMode === "ai") {
+          if (stone === humanPlayer) {
+            recordGameResult("human");
+            setStatus(`플레이어 ${getStoneName(stone)} 승리! 전적이 기록되었습니다`);
+          } else {
+            recordGameResult("ai");
+            setStatus(`AI ${getStoneName(stone)} 승리! 전적이 기록되었습니다`);
+          }
         } else {
-          recordGameResult("ai");
-          setStatus(`AI ${getStoneName(stone)} 승리! 전적이 기록되었습니다`);
+          setStatus(`${getStoneName(stone)} 승리!`);
         }
 
         updateTurnText();
@@ -672,10 +628,16 @@
 
       if (isBoardFull()) {
         isGameOver = true;
-        recordGameResult("draw");
+
+        if (gameMode === "ai") {
+          recordGameResult("draw");
+          setStatus("무승부입니다. 전적이 기록되었습니다");
+        } else {
+          setStatus("무승부입니다");
+        }
+
         updateTurnText();
         drawBoard();
-        setStatus("무승부입니다. 전적이 기록되었습니다");
         return;
       }
 
@@ -686,17 +648,20 @@
       const displayRow = row + 1;
       const displayCol = col + 1;
 
-      if (stone === humanPlayer) {
-        setStatus(`${displayRow}행 ${displayCol}열에 플레이어가 두었습니다`);
+      if (gameMode === "friend") {
+        setStatus(`${displayRow}행 ${displayCol}열에 ${getStoneName(stone)}을 두었습니다`);
       } else {
-        setStatus(`${displayRow}행 ${displayCol}열에 AI가 두었습니다`);
+        if (stone === humanPlayer) {
+          setStatus(`${displayRow}행 ${displayCol}열에 플레이어가 두었습니다`);
+        } else {
+          setStatus(`${displayRow}행 ${displayCol}열에 AI가 두었습니다`);
+        }
       }
     }
 
     function requestAiMove() {
-      if (isGameOver || currentPlayer !== aiPlayer) {
-        return;
-      }
+      if (gameMode !== "ai") return;
+      if (isGameOver || currentPlayer !== aiPlayer) return;
 
       isAiThinking = true;
       updateTurnText();
@@ -717,89 +682,97 @@
         }
 
         makeMove(move.row, move.col, aiPlayer);
-      }, 500);
+      }, 450);
     }
 
     function getAiMove() {
-      if (difficulty === "Easy") {
-        return getRandomAiMove(aiPlayer);
-      }
-
-      if (difficulty === "Normal") {
-        return getNormalAiMove();
-      }
-
-      return getHardAiMove();
+      if (difficulty === "Very Easy") return getRandomAiMove(aiPlayer);
+      if (difficulty === "Easy") return getRandomNearMove(aiPlayer);
+      if (difficulty === "Normal") return getNormalAiMove();
+      if (difficulty === "Hard") return getHardAiMove();
+      return getExpertAiMove();
     }
 
     function getNormalAiMove() {
       const aiWinMove = findWinningMove(aiPlayer);
-
-      if (aiWinMove !== null) {
-        return aiWinMove;
-      }
+      if (aiWinMove !== null) return aiWinMove;
 
       const blockHumanMove = findWinningMove(humanPlayer);
-
-      if (blockHumanMove !== null) {
-        return blockHumanMove;
-      }
+      if (blockHumanMove !== null) return blockHumanMove;
 
       return getRandomNearMove(aiPlayer);
     }
 
     function getHardAiMove() {
       const aiWinMove = findWinningMove(aiPlayer);
-
-      if (aiWinMove !== null) {
-        return aiWinMove;
-      }
+      if (aiWinMove !== null) return aiWinMove;
 
       const blockHumanMove = findWinningMove(humanPlayer);
-
-      if (blockHumanMove !== null) {
-        return blockHumanMove;
-      }
+      if (blockHumanMove !== null) return blockHumanMove;
 
       return getBestScoredMove(aiPlayer, humanPlayer);
     }
 
+    function getExpertAiMove() {
+      const aiWinMove = findWinningMove(aiPlayer);
+      if (aiWinMove !== null) return aiWinMove;
+
+      const blockHumanMove = findWinningMove(humanPlayer);
+      if (blockHumanMove !== null) return blockHumanMove;
+
+      const dangerousHumanMove = findStrongThreatMove(humanPlayer);
+      if (dangerousHumanMove !== null) return dangerousHumanMove;
+
+      return getExpertScoredMove(aiPlayer, humanPlayer);
+    }
+
     function findWinningMove(stone) {
-      const candidates = getCandidateMoves();
+      const candidates = getCandidateMoves(2);
 
       for (const move of candidates) {
         const { row, col } = move;
 
-        if (board[row][col] !== EMPTY) {
-          continue;
-        }
-
-        if (getForbiddenReason(row, col, stone) !== null) {
-          continue;
-        }
+        if (board[row][col] !== EMPTY) continue;
+        if (getForbiddenReason(row, col, stone) !== null) continue;
 
         board[row][col] = stone;
         const result = checkWin(row, col, stone);
         board[row][col] = EMPTY;
 
-        if (result !== null) {
-          return { row, col };
-        }
+        if (result !== null) return { row, col };
       }
 
       return null;
     }
 
-    function getBestScoredMove(myStone, opponentStone) {
-      const candidates = getCandidateMoves();
+    function findStrongThreatMove(stone) {
+      const candidates = getCandidateMoves(2);
+      let bestMove = null;
+      let bestScore = -Infinity;
 
+      for (const move of candidates) {
+        if (board[move.row][move.col] !== EMPTY) continue;
+        if (getForbiddenReason(move.row, move.col, stone) !== null) continue;
+
+        const score = evaluatePosition(move.row, move.col, stone);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+      }
+
+      if (bestScore >= 8000) return bestMove;
+      return null;
+    }
+
+    function getBestScoredMove(myStone, opponentStone) {
+      const candidates = getCandidateMoves(2);
       let bestScore = -Infinity;
       let bestMoves = [];
 
       for (const move of candidates) {
-        if (getForbiddenReason(move.row, move.col, myStone) !== null) {
-          continue;
-        }
+        if (getForbiddenReason(move.row, move.col, myStone) !== null) continue;
 
         const attackScore = evaluatePosition(move.row, move.col, myStone);
         const defenseScore = evaluatePosition(move.row, move.col, opponentStone) * 1.15;
@@ -815,28 +788,74 @@
         }
       }
 
-      if (bestMoves.length === 0) {
-        return getRandomAiMove(myStone);
+      if (bestMoves.length === 0) return getRandomAiMove(myStone);
+
+      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    function getExpertScoredMove(myStone, opponentStone) {
+      const candidates = getCandidateMoves(3);
+      let bestScore = -Infinity;
+      let bestMoves = [];
+
+      for (const move of candidates) {
+        if (getForbiddenReason(move.row, move.col, myStone) !== null) continue;
+
+        const attackScore = evaluatePosition(move.row, move.col, myStone) * 1.35;
+        const defenseScore = evaluatePosition(move.row, move.col, opponentStone) * 1.55;
+        const centerScore = getCenterScore(move.row, move.col) * 1.2;
+        const futureScore = evaluateFuturePotential(move.row, move.col, myStone) * 0.45;
+
+        const totalScore = attackScore + defenseScore + centerScore + futureScore;
+
+        if (totalScore > bestScore) {
+          bestScore = totalScore;
+          bestMoves = [move];
+        } else if (totalScore === bestScore) {
+          bestMoves.push(move);
+        }
       }
 
-      const randomIndex = Math.floor(Math.random() * bestMoves.length);
-      return bestMoves[randomIndex];
+      if (bestMoves.length === 0) return getRandomAiMove(myStone);
+
+      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    function evaluateFuturePotential(row, col, stone) {
+      if (board[row][col] !== EMPTY) return -Infinity;
+
+      board[row][col] = stone;
+
+      let score = 0;
+
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+
+          const nextRow = row + dr;
+          const nextCol = col + dc;
+
+          if (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === EMPTY) {
+            score += evaluatePosition(nextRow, nextCol, stone) * 0.05;
+          }
+        }
+      }
+
+      board[row][col] = EMPTY;
+      return score;
     }
 
     function getRandomNearMove(stone) {
-      const candidates = getCandidateMoves().filter((move) => {
+      const candidates = getCandidateMoves(2).filter((move) => {
         return getForbiddenReason(move.row, move.col, stone) === null;
       });
 
-      if (candidates.length === 0) {
-        return getRandomAiMove(stone);
-      }
+      if (candidates.length === 0) return getRandomAiMove(stone);
 
-      const randomIndex = Math.floor(Math.random() * candidates.length);
-      return candidates[randomIndex];
+      return candidates[Math.floor(Math.random() * candidates.length)];
     }
 
-    function getCandidateMoves() {
+    function getCandidateMoves(range = 2) {
       if (isBoardEmpty()) {
         const center = Math.floor(boardSize / 2);
         return [{ row: center, col: center }];
@@ -846,12 +865,10 @@
 
       for (let row = 0; row < boardSize; row++) {
         for (let col = 0; col < boardSize; col++) {
-          if (board[row][col] === EMPTY) {
-            continue;
-          }
+          if (board[row][col] === EMPTY) continue;
 
-          for (let dr = -2; dr <= 2; dr++) {
-            for (let dc = -2; dc <= 2; dc++) {
+          for (let dr = -range; dr <= range; dr++) {
+            for (let dc = -range; dc <= range; dc++) {
               const nextRow = row + dr;
               const nextCol = col + dc;
 
@@ -859,10 +876,7 @@
                 isInsideBoard(nextRow, nextCol) &&
                 board[nextRow][nextCol] === EMPTY
               ) {
-                candidateMap.set(`${nextRow},${nextCol}`, {
-                  row: nextRow,
-                  col: nextCol,
-                });
+                candidateMap.set(`${nextRow},${nextCol}`, { row: nextRow, col: nextCol });
               }
             }
           }
@@ -870,22 +884,12 @@
       }
 
       const candidates = Array.from(candidateMap.values());
-
-      if (candidates.length === 0) {
-        return getAllEmptyCells();
-      }
-
-      return candidates;
+      return candidates.length > 0 ? candidates : getAllEmptyCells();
     }
 
     function evaluatePosition(row, col, stone) {
-      if (board[row][col] !== EMPTY) {
-        return -Infinity;
-      }
-
-      if (getForbiddenReason(row, col, stone) !== null) {
-        return -Infinity;
-      }
+      if (board[row][col] !== EMPTY) return -Infinity;
+      if (getForbiddenReason(row, col, stone) !== null) return -Infinity;
 
       board[row][col] = stone;
 
@@ -904,7 +908,6 @@
       }
 
       board[row][col] = EMPTY;
-
       return score;
     }
 
@@ -942,46 +945,21 @@
     }
 
     function getPatternScore(count, openEnds) {
-      if (count >= 5) {
-        return 100000;
-      }
-
-      if (count === 4 && openEnds === 2) {
-        return 50000;
-      }
-
-      if (count === 4 && openEnds === 1) {
-        return 20000;
-      }
-
-      if (count === 3 && openEnds === 2) {
-        return 8000;
-      }
-
-      if (count === 3 && openEnds === 1) {
-        return 1500;
-      }
-
-      if (count === 2 && openEnds === 2) {
-        return 600;
-      }
-
-      if (count === 2 && openEnds === 1) {
-        return 150;
-      }
-
-      if (count === 1 && openEnds === 2) {
-        return 20;
-      }
-
+      if (count >= 5) return 100000;
+      if (count === 4 && openEnds === 2) return 60000;
+      if (count === 4 && openEnds === 1) return 25000;
+      if (count === 3 && openEnds === 2) return 9000;
+      if (count === 3 && openEnds === 1) return 1800;
+      if (count === 2 && openEnds === 2) return 700;
+      if (count === 2 && openEnds === 1) return 180;
+      if (count === 1 && openEnds === 2) return 30;
       return 1;
     }
 
     function getCenterScore(row, col) {
       const center = Math.floor(boardSize / 2);
       const distance = Math.abs(row - center) + Math.abs(col - center);
-
-      return Math.max(0, 30 - distance * 2);
+      return Math.max(0, 35 - distance * 2);
     }
 
     function getRandomAiMove(stone) {
@@ -989,9 +967,7 @@
         return getForbiddenReason(cell.row, cell.col, stone) === null;
       });
 
-      if (legalCells.length === 0) {
-        return null;
-      }
+      if (legalCells.length === 0) return null;
 
       if (isBoardEmpty()) {
         const center = Math.floor(boardSize / 2);
@@ -999,13 +975,10 @@
           return cell.row === center && cell.col === center;
         });
 
-        if (centerMove !== undefined) {
-          return centerMove;
-        }
+        if (centerMove !== undefined) return centerMove;
       }
 
-      const randomIndex = Math.floor(Math.random() * legalCells.length);
-      return legalCells[randomIndex];
+      return legalCells[Math.floor(Math.random() * legalCells.length)];
     }
 
     function getAllEmptyCells() {
@@ -1036,10 +1009,7 @@
 
       for (const [dr, dc] of directions) {
         const connectedCells = getConnectedCellsInDirection(row, col, dr, dc, stone);
-
-        if (connectedCells.length >= 5) {
-          return connectedCells;
-        }
+        if (connectedCells.length >= 5) return connectedCells;
       }
 
       return null;
@@ -1055,10 +1025,7 @@
 
       for (const [dr, dc] of directions) {
         const connectedCells = getConnectedCellsInDirection(row, col, dr, dc, stone);
-
-        if (connectedCells.length === 5) {
-          return connectedCells;
-        }
+        if (connectedCells.length === 5) return connectedCells;
       }
 
       return null;
@@ -1089,21 +1056,10 @@
     }
 
     function getForbiddenReason(row, col, stone) {
-      if (ruleMode !== "renju") {
-        return null;
-      }
-
-      if (stone !== BLACK) {
-        return null;
-      }
-
-      if (!isInsideBoard(row, col)) {
-        return null;
-      }
-
-      if (board[row][col] !== EMPTY) {
-        return null;
-      }
+      if (ruleMode !== "renju") return null;
+      if (stone !== BLACK) return null;
+      if (!isInsideBoard(row, col)) return null;
+      if (board[row][col] !== EMPTY) return null;
 
       board[row][col] = stone;
 
@@ -1119,23 +1075,14 @@
           const openThreeCount = countOpenThrees(row, col, stone);
           const fourCount = countFours(row, col, stone);
 
-          if (openThreeCount >= 2) {
-            reasons.push("33 금수");
-          }
-
-          if (fourCount >= 2) {
-            reasons.push("44 금수");
-          }
+          if (openThreeCount >= 2) reasons.push("33 금수");
+          if (fourCount >= 2) reasons.push("44 금수");
         }
       }
 
       board[row][col] = EMPTY;
 
-      if (reasons.length === 0) {
-        return null;
-      }
-
-      return reasons.join(", ");
+      return reasons.length === 0 ? null : reasons.join(", ");
     }
 
     function hasOverline(row, col, stone) {
@@ -1148,10 +1095,7 @@
 
       for (const [dr, dc] of directions) {
         const connectedCells = getConnectedCellsInDirection(row, col, dr, dc, stone);
-
-        if (connectedCells.length >= 6) {
-          return true;
-        }
+        if (connectedCells.length >= 6) return true;
       }
 
       return false;
@@ -1168,9 +1112,7 @@
       let count = 0;
 
       for (const [dr, dc] of directions) {
-        if (hasFourThreatInDirection(row, col, dr, dc, stone)) {
-          count++;
-        }
+        if (hasFourThreatInDirection(row, col, dr, dc, stone)) count++;
       }
 
       return count;
@@ -1183,26 +1125,17 @@
         const testRow = row + dr * offset;
         const testCol = col + dc * offset;
 
-        if (!isInsideBoard(testRow, testCol)) {
-          continue;
-        }
-
-        if (board[testRow][testCol] !== EMPTY) {
-          continue;
-        }
+        if (!isInsideBoard(testRow, testCol)) continue;
+        if (board[testRow][testCol] !== EMPTY) continue;
 
         board[testRow][testCol] = stone;
 
         const connectedCells = getConnectedCellsInDirection(testRow, testCol, dr, dc, stone);
 
         if (stone === BLACK && ruleMode === "renju") {
-          if (connectedCells.length === 5) {
-            winningMoves.add(`${testRow},${testCol}`);
-          }
+          if (connectedCells.length === 5) winningMoves.add(`${testRow},${testCol}`);
         } else {
-          if (connectedCells.length >= 5) {
-            winningMoves.add(`${testRow},${testCol}`);
-          }
+          if (connectedCells.length >= 5) winningMoves.add(`${testRow},${testCol}`);
         }
 
         board[testRow][testCol] = EMPTY;
@@ -1222,9 +1155,7 @@
       let count = 0;
 
       for (const [dr, dc] of directions) {
-        if (hasOpenThreeInDirection(row, col, dr, dc, stone)) {
-          count++;
-        }
+        if (hasOpenThreeInDirection(row, col, dr, dc, stone)) count++;
       }
 
       return count;
@@ -1235,13 +1166,8 @@
         const testRow = row + dr * offset;
         const testCol = col + dc * offset;
 
-        if (!isInsideBoard(testRow, testCol)) {
-          continue;
-        }
-
-        if (board[testRow][testCol] !== EMPTY) {
-          continue;
-        }
+        if (!isInsideBoard(testRow, testCol)) continue;
+        if (board[testRow][testCol] !== EMPTY) continue;
 
         board[testRow][testCol] = stone;
 
@@ -1249,9 +1175,7 @@
 
         board[testRow][testCol] = EMPTY;
 
-        if (createsOpenFour) {
-          return true;
-        }
+        if (createsOpenFour) return true;
       }
 
       return false;
@@ -1264,21 +1188,14 @@
         const testRow = row + dr * offset;
         const testCol = col + dc * offset;
 
-        if (!isInsideBoard(testRow, testCol)) {
-          continue;
-        }
-
-        if (board[testRow][testCol] !== EMPTY) {
-          continue;
-        }
+        if (!isInsideBoard(testRow, testCol)) continue;
+        if (board[testRow][testCol] !== EMPTY) continue;
 
         board[testRow][testCol] = stone;
 
         const connectedCells = getConnectedCellsInDirection(testRow, testCol, dr, dc, stone);
 
-        if (connectedCells.length === 5) {
-          winningMoves.add(`${testRow},${testCol}`);
-        }
+        if (connectedCells.length === 5) winningMoves.add(`${testRow},${testCol}`);
 
         board[testRow][testCol] = EMPTY;
       }
@@ -1293,9 +1210,7 @@
     function isBoardFull() {
       for (let row = 0; row < boardSize; row++) {
         for (let col = 0; col < boardSize; col++) {
-          if (board[row][col] === EMPTY) {
-            return false;
-          }
+          if (board[row][col] === EMPTY) return false;
         }
       }
 
@@ -1305,9 +1220,7 @@
     function isBoardEmpty() {
       for (let row = 0; row < boardSize; row++) {
         for (let col = 0; col < boardSize; col++) {
-          if (board[row][col] !== EMPTY) {
-            return false;
-          }
+          if (board[row][col] !== EMPTY) return false;
         }
       }
 
@@ -1315,19 +1228,15 @@
     }
 
     function getOpponent(stone) {
-      if (stone === BLACK) {
-        return WHITE;
-      }
-
-      return BLACK;
+      return stone === BLACK ? WHITE : BLACK;
     }
 
     function getStoneName(stone) {
-      if (stone === BLACK) {
-        return "흑돌";
-      }
+      return stone === BLACK ? "흑돌" : "백돌";
+    }
 
-      return "백돌";
+    function updateModeText() {
+      modeText.textContent = gameMode === "ai" ? "모드: AI 대전" : "모드: 친구 대전";
     }
 
     function updateDifficultyText() {
@@ -1339,27 +1248,15 @@
     }
 
     function updateRuleText() {
-      if (ruleMode === "renju") {
-        ruleText.textContent = "룰: 렌주룰";
-      } else {
-        ruleText.textContent = "룰: 자유룰";
-      }
+      ruleText.textContent = ruleMode === "renju" ? "룰: 렌주룰" : "룰: 자유룰";
     }
 
     function updateForbiddenText() {
-      if (showForbidden) {
-        forbiddenText.textContent = "금수 표시: 켜짐";
-      } else {
-        forbiddenText.textContent = "금수 표시: 꺼짐";
-      }
+      forbiddenText.textContent = showForbidden ? "금수 표시: 켜짐" : "금수 표시: 꺼짐";
     }
 
     function updateMoveNumberText() {
-      if (showMoveNumbers) {
-        numberText.textContent = "수순 번호: 켜짐";
-      } else {
-        numberText.textContent = "수순 번호: 꺼짐";
-      }
+      numberText.textContent = showMoveNumbers ? "수순 번호: 켜짐" : "수순 번호: 꺼짐";
     }
 
     function updateTurnText() {
@@ -1373,6 +1270,11 @@
         return;
       }
 
+      if (gameMode === "friend") {
+        turnText.textContent = `현재 차례: ${getStoneName(currentPlayer)}`;
+        return;
+      }
+
       if (currentPlayer === humanPlayer) {
         turnText.textContent = `현재 차례: 플레이어 ${getStoneName(currentPlayer)}`;
       } else {
@@ -1381,11 +1283,20 @@
     }
 
     function updatePlayerText() {
-      playerText.textContent = `플레이어: ${getStoneName(humanPlayer)}`;
+      if (gameMode === "friend") {
+        playerText.textContent = "플레이어: 흑/백 번갈아";
+      } else {
+        playerText.textContent = `플레이어: ${getStoneName(humanPlayer)}`;
+      }
     }
 
     function updateMoveCountText() {
       moveCountText.textContent = `수순: ${moveHistory.length}수`;
+    }
+
+    function updateRecordText() {
+      recordText.textContent =
+        `전적: ${record.humanWin}승 ${record.aiWin}패 ${record.draw}무`;
     }
 
     function setStatus(message) {
@@ -1396,11 +1307,7 @@
       const savedRecord = localStorage.getItem(RECORD_KEY);
 
       if (savedRecord === null) {
-        return {
-          humanWin: 0,
-          aiWin: 0,
-          draw: 0,
-        };
+        return { humanWin: 0, aiWin: 0, draw: 0 };
       }
 
       try {
@@ -1411,26 +1318,13 @@
           typeof parsedRecord.aiWin !== "number" ||
           typeof parsedRecord.draw !== "number"
         ) {
-          return {
-            humanWin: 0,
-            aiWin: 0,
-            draw: 0,
-          };
+          return { humanWin: 0, aiWin: 0, draw: 0 };
         }
 
         return parsedRecord;
       } catch (error) {
-        return {
-          humanWin: 0,
-          aiWin: 0,
-          draw: 0,
-        };
+        return { humanWin: 0, aiWin: 0, draw: 0 };
       }
-    }
-
-    function updateRecordText() {
-      recordText.textContent =
-        `전적: ${record.humanWin}승 ${record.aiWin}패 ${record.draw}무`;
     }
 
     function saveRecord() {
@@ -1438,36 +1332,24 @@
     }
 
     function recordGameResult(result) {
-      if (recordedResult !== null) {
-        return;
-      }
+      if (recordedResult !== null) return;
 
       recordedResult = result;
 
-      if (result === "human") {
-        record.humanWin++;
-      } else if (result === "ai") {
-        record.aiWin++;
-      } else if (result === "draw") {
-        record.draw++;
-      }
+      if (result === "human") record.humanWin++;
+      else if (result === "ai") record.aiWin++;
+      else if (result === "draw") record.draw++;
 
       saveRecord();
       updateRecordText();
     }
 
     function removeRecordedResult() {
-      if (recordedResult === null) {
-        return;
-      }
+      if (recordedResult === null) return;
 
-      if (recordedResult === "human") {
-        record.humanWin = Math.max(0, record.humanWin - 1);
-      } else if (recordedResult === "ai") {
-        record.aiWin = Math.max(0, record.aiWin - 1);
-      } else if (recordedResult === "draw") {
-        record.draw = Math.max(0, record.draw - 1);
-      }
+      if (recordedResult === "human") record.humanWin = Math.max(0, record.humanWin - 1);
+      else if (recordedResult === "ai") record.aiWin = Math.max(0, record.aiWin - 1);
+      else if (recordedResult === "draw") record.draw = Math.max(0, record.draw - 1);
 
       recordedResult = null;
       saveRecord();
@@ -1487,24 +1369,32 @@
       isAiThinking = false;
       recordedResult = null;
 
-      updateDifficultyText();
-      updateBoardSizeText();
-      updateRuleText();
-      updateForbiddenText();
-      updateMoveNumberText();
-      updatePlayerText();
-      updateTurnText();
-      updateMoveCountText();
+      updateAllTexts();
       drawBoard();
       setStatus(message);
 
-      if (currentPlayer === aiPlayer) {
+      if (gameMode === "ai" && currentPlayer === aiPlayer) {
         requestAiMove();
       }
     }
 
     function handleNewGame() {
       resetGame("새 게임을 시작합니다");
+    }
+
+    function handleModeChange() {
+      if (isAiThinking) {
+        setStatus("AI가 생각 중일 때는 모드를 바꿀 수 없습니다");
+        return;
+      }
+
+      if (gameMode === "ai") {
+        gameMode = "friend";
+        resetGame("친구 대전 모드입니다. 흑돌과 백돌이 번갈아 둡니다");
+      } else {
+        gameMode = "ai";
+        resetGame("AI 대전 모드입니다");
+      }
     }
 
     function handleBoardSizeChange() {
@@ -1517,33 +1407,37 @@
       const nextIndex = (currentIndex + 1) % BOARD_SIZE_OPTIONS.length;
 
       boardSize = BOARD_SIZE_OPTIONS[nextIndex];
-
       resetGame(`${boardSize} x ${boardSize} 판으로 변경했습니다`);
     }
 
     function handleDifficulty() {
-      if (difficulty === "Easy") {
-        difficulty = "Normal";
-      } else if (difficulty === "Normal") {
-        difficulty = "Hard";
-      } else {
-        difficulty = "Easy";
-      }
+      const currentIndex = DIFFICULTY_OPTIONS.indexOf(difficulty);
+      const nextIndex = (currentIndex + 1) % DIFFICULTY_OPTIONS.length;
 
+      difficulty = DIFFICULTY_OPTIONS[nextIndex];
       updateDifficultyText();
 
-      if (difficulty === "Easy") {
-        setStatus("Easy: AI가 랜덤으로 둡니다");
+      if (difficulty === "Very Easy") {
+        setStatus("Very Easy: AI가 거의 랜덤으로 둡니다");
+      } else if (difficulty === "Easy") {
+        setStatus("Easy: AI가 가까운 곳 위주로 둡니다");
       } else if (difficulty === "Normal") {
-        setStatus("Normal: AI가 승리/방어만 판단합니다");
-      } else {
+        setStatus("Normal: AI가 이길 자리와 막을 자리를 판단합니다");
+      } else if (difficulty === "Hard") {
         setStatus("Hard: AI가 공격/방어 점수를 계산합니다");
+      } else {
+        setStatus("Expert: AI가 더 넓게 보고 위협 수까지 계산합니다");
       }
     }
 
     function handleColorChange() {
       if (isAiThinking) {
         setStatus("AI가 생각 중일 때는 색을 바꿀 수 없습니다");
+        return;
+      }
+
+      if (gameMode === "friend") {
+        setStatus("친구 대전에서는 흑돌과 백돌이 자동으로 번갈아 둡니다");
         return;
       }
 
@@ -1579,11 +1473,7 @@
       drawBoard();
 
       if (showForbidden) {
-        if (ruleMode === "renju") {
-          setStatus("흑돌 금수 위치를 표시합니다");
-        } else {
-          setStatus("자유룰에서는 금수가 없습니다");
-        }
+        setStatus(ruleMode === "renju" ? "흑돌 금수 위치를 표시합니다" : "자유룰에서는 금수가 없습니다");
       } else {
         setStatus("금수 위치 표시를 끕니다");
       }
@@ -1594,11 +1484,7 @@
       updateMoveNumberText();
       drawBoard();
 
-      if (showMoveNumbers) {
-        setStatus("돌 위에 수순 번호를 표시합니다");
-      } else {
-        setStatus("수순 번호 표시를 끕니다");
-      }
+      setStatus(showMoveNumbers ? "돌 위에 수순 번호를 표시합니다" : "수순 번호 표시를 끕니다");
     }
 
     function handleHint() {
@@ -1612,22 +1498,25 @@
         return;
       }
 
-      if (currentPlayer !== humanPlayer) {
+      if (gameMode === "ai" && currentPlayer !== humanPlayer) {
         setStatus("지금은 AI 차례입니다");
         return;
       }
 
-      const winningMove = findWinningMove(humanPlayer);
+      const currentStone = currentPlayer;
+      const opponentStone = getOpponent(currentStone);
+
+      const winningMove = findWinningMove(currentStone);
 
       if (winningMove !== null) {
         hintPosition = winningMove;
       } else {
-        const blockMove = findWinningMove(aiPlayer);
+        const blockMove = findWinningMove(opponentStone);
 
         if (blockMove !== null) {
           hintPosition = blockMove;
         } else {
-          hintPosition = getBestScoredMove(humanPlayer, aiPlayer);
+          hintPosition = getBestScoredMove(currentStone, opponentStone);
         }
       }
 
@@ -1651,15 +1540,6 @@
         return;
       }
 
-      if (
-        moveHistory.length === 1 &&
-        moveHistory[0].stone === aiPlayer &&
-        humanPlayer === WHITE
-      ) {
-        setStatus("첫 AI 수는 무를 수 없습니다. 새 게임 또는 흑/백 버튼을 사용하세요");
-        return;
-      }
-
       if (isGameOver && recordedResult !== null) {
         removeRecordedResult();
       }
@@ -1668,12 +1548,23 @@
       hintPosition = null;
       isGameOver = false;
 
-      const lastMove = moveHistory[moveHistory.length - 1];
-
       let undoCount = 1;
 
-      if (lastMove.stone === aiPlayer && moveHistory.length >= 2) {
-        undoCount = 2;
+      if (gameMode === "ai") {
+        const lastMove = moveHistory[moveHistory.length - 1];
+
+        if (
+          moveHistory.length === 1 &&
+          lastMove.stone === aiPlayer &&
+          humanPlayer === WHITE
+        ) {
+          setStatus("첫 AI 수는 무를 수 없습니다. 새 게임 또는 흑/백 버튼을 사용하세요");
+          return;
+        }
+
+        if (lastMove.stone === aiPlayer && moveHistory.length >= 2) {
+          undoCount = 2;
+        }
       }
 
       for (let i = 0; i < undoCount; i++) {
@@ -1686,15 +1577,16 @@
 
       if (moveHistory.length > 0) {
         const previousMove = moveHistory[moveHistory.length - 1];
-        lastPosition = {
-          row: previousMove.row,
-          col: previousMove.col,
-        };
+        lastPosition = { row: previousMove.row, col: previousMove.col };
+        currentPlayer = getOpponent(previousMove.stone);
       } else {
         lastPosition = null;
+        currentPlayer = BLACK;
       }
 
-      currentPlayer = humanPlayer;
+      if (gameMode === "ai") {
+        currentPlayer = humanPlayer;
+      }
 
       updateTurnText();
       updateMoveCountText();
@@ -1715,6 +1607,7 @@
 
       const saveData = {
         boardSize,
+        gameMode,
         board,
         difficulty,
         ruleMode,
@@ -1769,6 +1662,7 @@
           return;
         }
 
+        gameMode = savedData.gameMode || "ai";
         board = savedData.board;
         difficulty = savedData.difficulty;
         ruleMode = savedData.ruleMode || "renju";
@@ -1787,19 +1681,12 @@
         hintPosition = null;
         isAiThinking = false;
 
-        updateDifficultyText();
-        updateBoardSizeText();
-        updateRuleText();
-        updateForbiddenText();
-        updateMoveNumberText();
-        updatePlayerText();
-        updateTurnText();
-        updateMoveCountText();
+        updateAllTexts();
         drawBoard();
 
         setStatus("저장된 게임을 불러왔습니다");
 
-        if (!isGameOver && currentPlayer === aiPlayer) {
+        if (gameMode === "ai" && !isGameOver && currentPlayer === aiPlayer) {
           requestAiMove();
         }
       } catch (error) {
@@ -1808,55 +1695,26 @@
     }
 
     function isValidSaveData(data) {
-      if (data === null || typeof data !== "object") {
-        return false;
-      }
-
-      if (!Array.isArray(data.board) || data.board.length !== boardSize) {
-        return false;
-      }
+      if (data === null || typeof data !== "object") return false;
+      if (!Array.isArray(data.board) || data.board.length !== boardSize) return false;
 
       for (let row = 0; row < boardSize; row++) {
-        if (!Array.isArray(data.board[row]) || data.board[row].length !== boardSize) {
-          return false;
-        }
+        if (!Array.isArray(data.board[row]) || data.board[row].length !== boardSize) return false;
 
         for (let col = 0; col < boardSize; col++) {
           const value = data.board[row][col];
-
-          if (value !== EMPTY && value !== BLACK && value !== WHITE) {
-            return false;
-          }
+          if (value !== EMPTY && value !== BLACK && value !== WHITE) return false;
         }
       }
 
-      if (!["Easy", "Normal", "Hard"].includes(data.difficulty)) {
-        return false;
-      }
-
-      if (data.ruleMode !== undefined && !["renju", "free"].includes(data.ruleMode)) {
-        return false;
-      }
-
-      if (![BLACK, WHITE].includes(data.humanPlayer)) {
-        return false;
-      }
-
-      if (![BLACK, WHITE].includes(data.aiPlayer)) {
-        return false;
-      }
-
-      if (![BLACK, WHITE].includes(data.currentPlayer)) {
-        return false;
-      }
-
-      if (!Array.isArray(data.moveHistory)) {
-        return false;
-      }
-
-      if (!Array.isArray(data.winningCells)) {
-        return false;
-      }
+      if (!DIFFICULTY_OPTIONS.includes(data.difficulty)) return false;
+      if (data.ruleMode !== undefined && !["renju", "free"].includes(data.ruleMode)) return false;
+      if (data.gameMode !== undefined && !["ai", "friend"].includes(data.gameMode)) return false;
+      if (![BLACK, WHITE].includes(data.humanPlayer)) return false;
+      if (![BLACK, WHITE].includes(data.aiPlayer)) return false;
+      if (![BLACK, WHITE].includes(data.currentPlayer)) return false;
+      if (!Array.isArray(data.moveHistory)) return false;
+      if (!Array.isArray(data.winningCells)) return false;
 
       return true;
     }
@@ -1865,30 +1723,25 @@
       showCoordinates = !showCoordinates;
       drawBoard();
 
-      if (showCoordinates) {
-        setStatus("오목판 좌표를 표시합니다");
-      } else {
-        setStatus("오목판 좌표를 숨겼습니다");
-      }
+      setStatus(showCoordinates ? "오목판 좌표를 표시합니다" : "오목판 좌표를 숨겼습니다");
     }
 
     function handleHelp() {
       const helpMessage =
         "게임 방법\n\n" +
-        "1. 먼저 5개의 돌을 가로, 세로, 대각선으로 연결하면 승리합니다.\n" +
-        "2. 플레이어는 사람, 상대는 AI입니다.\n" +
-        "3. 판 크기 버튼으로 13x13, 15x15, 19x19를 바꿀 수 있습니다.\n" +
-        "4. Easy는 랜덤 AI입니다.\n" +
-        "5. Normal은 이길 자리와 막을 자리를 찾습니다.\n" +
-        "6. Hard는 공격/방어 점수를 계산합니다.\n" +
-        "7. 렌주룰에서는 흑돌의 33, 44, 6목 이상이 금지됩니다.\n" +
-        "8. 금수 표시 버튼을 누르면 흑돌이 둘 수 없는 자리가 빨간 X로 표시됩니다.\n" +
+        "1. 모드 버튼으로 AI 대전과 친구 대전을 바꿀 수 있습니다.\n" +
+        "2. 친구 대전에서는 흑돌과 백돌이 한 명씩 번갈아 둡니다.\n" +
+        "3. AI 대전에서는 플레이어와 AI가 대결합니다.\n" +
+        "4. 난이도는 Very Easy, Easy, Normal, Hard, Expert 5단계입니다.\n" +
+        "5. 판 크기 버튼으로 13x13, 15x15, 19x19를 바꿀 수 있습니다.\n" +
+        "6. 렌주룰에서는 흑돌의 33, 44, 6목 이상이 금지됩니다.\n" +
+        "7. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
+        "8. 금수 표시 버튼을 누르면 흑돌 금수 위치가 빨간 X로 표시됩니다.\n" +
         "9. 수순 번호 버튼을 누르면 돌 위에 몇 번째 수인지 표시됩니다.\n" +
-        "10. 자유룰에서는 흑백 모두 5개 이상 연결하면 승리합니다.\n" +
-        "11. 힌트는 현재 플레이어가 둘 만한 위치를 추천합니다.\n" +
-        "12. 무르기는 최근 플레이어 수와 AI 수를 되돌립니다.\n" +
-        "13. 전적은 브라우저에 자동 저장됩니다.\n" +
-        "14. 메뉴 열기/접기 버튼으로 스마트폰 화면을 넓게 쓸 수 있습니다.";
+        "10. 힌트는 현재 차례의 추천 위치를 표시합니다.\n" +
+        "11. AI 대전 무르기는 보통 플레이어 수와 AI 수를 함께 되돌립니다.\n" +
+        "12. 친구 대전 무르기는 마지막 한 수만 되돌립니다.\n" +
+        "13. 저장/불러오기는 현재 판 크기와 모드까지 함께 저장합니다.";
 
       alert(helpMessage);
     }
@@ -1903,12 +1756,7 @@
         return;
       }
 
-      record = {
-        humanWin: 0,
-        aiWin: 0,
-        draw: 0,
-      };
-
+      record = { humanWin: 0, aiWin: 0, draw: 0 };
       recordedResult = null;
 
       saveRecord();
@@ -1935,11 +1783,7 @@
       isMenuCollapsed = !isMenuCollapsed;
       updateMenuState();
 
-      if (isMenuCollapsed) {
-        setStatus("하단 메뉴를 접었습니다");
-      } else {
-        setStatus("하단 메뉴를 펼쳤습니다");
-      }
+      setStatus(isMenuCollapsed ? "하단 메뉴를 접었습니다" : "하단 메뉴를 펼쳤습니다");
     }
 
     function updateMenuState() {
@@ -1957,6 +1801,7 @@
     canvas.addEventListener("pointerdown", handleCanvasPointerDown);
 
     newGameBtn.addEventListener("click", handleNewGame);
+    modeBtn.addEventListener("click", handleModeChange);
     difficultyBtn.addEventListener("click", handleDifficulty);
     colorBtn.addEventListener("click", handleColorChange);
     menuToggleBtn.addEventListener("click", handleToggleMenu);
